@@ -36,7 +36,7 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
          * is, because a drink and a food lead to completely different
          * questions and guessing wrong wastes the user's time twice.
          */
-        data class NeedsKind(val product: Product) : State
+        data class NeedsKind(val product: Product, val correcting: Boolean = false) : State
 
         /**
          * A food. The caller hands this to the food screen, which asks how
@@ -76,8 +76,16 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
 
             val cached = products.byBarcode(barcode)
             if (cached != null) {
-                // Spec 11.1: the stored kind decides which question is asked.
-                route(cached)
+                if (cached.kind == suggestedKind) {
+                    // Spec 11.1: the stored kind decides which question is asked.
+                    route(cached)
+                } else {
+                    // Scanned from the other screen than it is filed under. The
+                    // stored kind may simply be wrong — everything scanned
+                    // before kinds existed was filed as a drink — so ask rather
+                    // than keep asking the wrong question forever.
+                    _state.value = State.NeedsKind(cached, correcting = true)
+                }
                 return@launch
             }
 

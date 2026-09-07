@@ -60,22 +60,30 @@ fun WeightWheel(
 
     val listState = rememberLazyListState(initialFirstVisibleItemIndex = startIndex)
     val fling = rememberSnapFlingBehavior(lazyListState = listState)
+    val cellPx = with(androidx.compose.ui.platform.LocalDensity.current) { CELL_WIDTH.dp.toPx() }
 
-    // The centred item is the selection. Content padding of two cells means
-    // the first visible item already sits under the marker, so no extra offset
-    // is added — doing that once put the reading two cells away from the lines.
+    /*
+     * The item under the marker, allowing for a part-scrolled cell.
+     *
+     * The marker sits at the centre of the viewport, so the side padding has
+     * to be exactly half the viewport minus half a cell for the first visible
+     * item to land under it. Guessing that padding as a fixed number of cells
+     * put the reported value three cells away from the one being pointed at,
+     * which is the second time this carousel has disagreed with itself.
+     */
     val selectedIndex by remember {
-        derivedStateOf { listState.firstVisibleItemIndex.coerceIn(0, values.lastIndex) }
+        derivedStateOf {
+            val nudge = if (listState.firstVisibleItemScrollOffset > cellPx / 2) 1 else 0
+            (listState.firstVisibleItemIndex + nudge).coerceIn(0, values.lastIndex)
+        }
     }
     val selected = values.getOrNull(selectedIndex)
 
-    // One source of truth: whatever the marker shows is what gets reported, so
-    // the button can never disagree with the carousel.
+    // One source of truth: whatever sits under the marker is what is reported,
+    // so the big number, the ruler and the button cannot disagree.
     LaunchedEffect(Unit) {
-        snapshotFlow { listState.firstVisibleItemIndex }
-            .collect { index ->
-                values.getOrNull(index.coerceIn(0, values.lastIndex))?.let(onValueChange)
-            }
+        snapshotFlow { selectedIndex }
+            .collect { index -> values.getOrNull(index)?.let(onValueChange) }
     }
 
     Column(modifier) {
@@ -95,16 +103,19 @@ fun WeightWheel(
             modifier = Modifier.fillMaxWidth(),
         )
 
-        Box(
+        androidx.compose.foundation.layout.BoxWithConstraints(
             modifier = Modifier.fillMaxWidth().height(64.dp).padding(top = 8.dp),
             contentAlignment = Alignment.Center,
         ) {
+            // Measured, not guessed: half the viewport less half a cell puts
+            // the first visible item exactly under the centre marker.
+            val sidePadding = (maxWidth - CELL_WIDTH.dp) / 2
             LazyRow(
                 state = listState,
                 flingBehavior = fling,
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(0.dp),
-                contentPadding = PaddingValues(horizontal = CELL_WIDTH.dp * VISIBLE_EITHER_SIDE),
+                contentPadding = PaddingValues(horizontal = sidePadding),
             ) {
                 items(values.size) { index ->
                     val value = values[index]
@@ -142,4 +153,3 @@ fun WeightWheel(
 }
 
 private const val CELL_WIDTH = 14
-private const val VISIBLE_EITHER_SIDE = 11

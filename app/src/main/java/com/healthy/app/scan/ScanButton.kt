@@ -128,6 +128,7 @@ fun ScanButton(
 
         is ScanViewModel.State.NeedsKind -> KindDialog(
             product = s.product,
+            correcting = s.correcting,
             onChoose = { kind -> vm.chooseKind(s.product, kind) },
             onDismiss = vm::dismiss,
         )
@@ -175,7 +176,12 @@ private fun scanOptions() = ScanOptions().apply {
  * instead of one.
  */
 @Composable
-private fun KindDialog(product: Product, onChoose: (String) -> Unit, onDismiss: () -> Unit) {
+private fun KindDialog(
+    product: Product,
+    correcting: Boolean = false,
+    onChoose: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
     Dialog(onDismissRequest = onDismiss) {
         Card(
             shape = RoundedCornerShape(16.dp),
@@ -190,8 +196,13 @@ private fun KindDialog(product: Product, onChoose: (String) -> Unit, onDismiss: 
                     fontWeight = FontWeight.SemiBold,
                 )
                 Text(
-                    "New to this app. Which is it? A drink is logged for its caffeine " +
-                        "and fluid; a food is logged for its weight and nutrients.",
+                    if (correcting) {
+                        "This is filed as a ${product.kind}, but you scanned it from the " +
+                            "other screen. Which is it? Changing it here fixes it for good."
+                    } else {
+                        "New to this app. Which is it? A drink is logged for its caffeine " +
+                            "and fluid; a food is logged for its weight and nutrients."
+                    },
                     color = HealthyColors.Muted,
                     fontSize = 12.sp,
                     modifier = Modifier.padding(top = 6.dp, bottom = 12.dp),
