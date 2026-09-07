@@ -100,24 +100,59 @@ class HealthReader(private val context: Context) {
                 )
             }
 
-            val window = TimeRangeFilter.between(
-                Instant.ofEpochMilli(start),
-                Instant.ofEpochMilli(end),
-            )
-
+            // A record has to be read by a window wide enough to CONTAIN it,
+            // not merely to overlap it: Health Connect's `between` matches
+            // interval records that fall inside the range, so a writer that
+            // packs a whole day into one HeartRateRecord — Gadgetbridge does —
+            // is invisible to a query bounded by the sleep window. Read wide,
+            // then filter the individual samples to the night.
             val heartRecords = client.readRecords(
-                ReadRecordsRequest(HeartRateRecord::class, timeRangeFilter = window)
+                ReadRecordsRequest(
+                    HeartRateRecord::class,
+                    timeRangeFilter = TimeRangeFilter.between(
+                        Instant.ofEpochMilli(start - RECORD_MARGIN_MILLIS),
+                        Instant.ofEpochMilli(end + RECORD_MARGIN_MILLIS),
+                    ),
+                )
             ).records
 
-            // Each record is a 30-minute group; the spec says use the minimum
-            // of each group, so a within-group spike cannot raise the result.
-            val groupMinima = heartRecords.mapNotNull { record ->
-                record.samples.minOfOrNull { it.beatsPerMinute.toInt() }
+            val nightSamples = heartRecords
+                .flatMap { record -> record.samples }
+                .filter { it.time.toEpochMilli() in start..end }
+                .map { Hypnogram.Sample(it.time.toEpochMilli(), it.beatsPerMinute.toInt()) }
+                .sortedBy { it.timeMillis }
+
+            // Spec 3.3 asks for the 5th percentile of the beats-per-minute
+            // values, and adds that the device writes 30-minute groups whose
+            // minima should be used. That second instruction exists because a
+            // writer that only exposes group min/max hides the samples.
+            //
+            // Gadgetbridge exposes every sample, and bucketing them defeats the
+            // purpose: a 4-hour night is only 9 buckets, and the 5th percentile
+            // of 9 numbers is just the lowest — precisely the single bad reading
+            // the percentile was chosen to reject. So take the percentile over
+            // the samples when they are dense enough to have one, and fall back
+            // to bucket minima when they are not.
+            val bpmForResting = if (nightSamples.size >= MIN_SAMPLES_FOR_PERCENTILE) {
+                nightSamples.map { it.bpm }
+            } else {
+                nightSamples
+                    .groupBy { (it.timeMillis - start) / THIRTY_MINUTES_MILLIS }
+                    .mapNotNull { (_, group) -> group.minOfOrNull { it.bpm } }
             }
 
+            // Same containment rule applies here, so read wide and filter.
             val oxygen = client.readRecords(
-                ReadRecordsRequest(OxygenSaturationRecord::class, timeRangeFilter = window)
-            ).records.map { it.percentage.value }
+                ReadRecordsRequest(
+                    OxygenSaturationRecord::class,
+                    timeRangeFilter = TimeRangeFilter.between(
+                        Instant.ofEpochMilli(start - RECORD_MARGIN_MILLIS),
+                        Instant.ofEpochMilli(end + RECORD_MARGIN_MILLIS),
+                    ),
+                )
+            ).records
+                .filter { it.time.toEpochMilli() in start..end }
+                .map { it.percentage.value }
 
             Result.Found(
                 NightData(
@@ -126,16 +161,12 @@ class HealthReader(private val context: Context) {
                     minutes = ((end - start) / 60_000L).toInt(),
                     stageBlocks = blocks,
                     totals = SleepAnalysis.stageTotals(blocks),
-                    restingHr = SleepAnalysis.restingHeartRate(groupMinima),
+                    restingHr = SleepAnalysis.restingHeartRate(bpmForResting),
                     spo2 = SleepAnalysis.meanSpo2(oxygen),
-                    heartRateSampleCount = heartRecords.sumOf { it.samples.size },
+                    heartRateSampleCount = nightSamples.size,
                     source = session.metadata.dataOrigin.packageName,
                     competingSessions = forThisNight.size - 1,
-                    heartRateSamples = heartRecords.flatMap { record ->
-                        record.samples.map {
-                            Hypnogram.Sample(it.time.toEpochMilli(), it.beatsPerMinute.toInt())
-                        }
-                    }.sortedBy { it.timeMillis },
+                    heartRateSamples = nightSamples,
                 )
             )
         }.getOrElse { Result.Failed(it.message ?: it::class.simpleName ?: "unknown error") }
@@ -230,7 +261,13 @@ class HealthReader(private val context: Context) {
 
             val allStages = sessions.flatMap { it.stages }
             val heart = client.readRecords(
-                ReadRecordsRequest(HeartRateRecord::class, timeRangeFilter = window)
+                ReadRecordsRequest(
+                    HeartRateRecord::class,
+                    timeRangeFilter = TimeRangeFilter.between(
+                        from.minusMillis(RECORD_MARGIN_MILLIS),
+                        now.plusMillis(RECORD_MARGIN_MILLIS),
+                    ),
+                )
             ).records
             val oxygen = client.readRecords(
                 ReadRecordsRequest(OxygenSaturationRecord::class, timeRangeFilter = window)
@@ -262,6 +299,20 @@ class HealthReader(private val context: Context) {
 
     private companion object {
         const val DAY_MILLIS = 24 * 60 * 60 * 1000L
+
+        /**
+         * How far either side of the night to look for records. A writer may
+         * pack a whole day into one record, and it has to be fully inside the
+         * query window to come back at all.
+         */
+        const val RECORD_MARGIN_MILLIS = 36 * 60 * 60 * 1000L
+        const val THIRTY_MINUTES_MILLIS = 30 * 60 * 1000L
+
+        /**
+         * Below this many samples the 5th percentile has too little to work
+         * with, so the 30-minute group minima are used instead.
+         */
+        const val MIN_SAMPLES_FOR_PERCENTILE = 40
     }
 }
 
