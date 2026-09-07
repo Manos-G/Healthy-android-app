@@ -90,6 +90,7 @@ fun ScanButton(
             productName = listOfNotNull(s.product.brand, s.product.name)
                 .joinToString(" ").trim().ifBlank { s.product.name },
             initialVolume = s.product.volumeMl,
+            guess = s.suggestion,
             onSave = { mg, perMl, totalMl, name ->
                 vm.saveCaffeine(s.product, mg, perMl, totalMl, name)
             },
@@ -151,12 +152,13 @@ private fun ResultDialog(title: String, body: String, onDismiss: () -> Unit) {
 private fun CaffeineDialog(
     productName: String,
     initialVolume: Int?,
+    guess: CaffeineReference.Guess? = null,
     heading: String? = null,
     onSave: (Int, Int, Int, String) -> Unit,
     onDismiss: () -> Unit,
 ) {
     var name by remember { mutableStateOf(productName) }
-    var mg by remember { mutableStateOf("") }
+    var mg by remember { mutableStateOf(guess?.mgPer100Ml?.toString() ?: "") }
     // Labels almost always state a figure per 100 ml, so that is the default;
     // a can that gives the whole amount is handled by setting this to the
     // container size.
@@ -218,6 +220,15 @@ private fun CaffeineDialog(
                     fontSize = 12.sp,
                     modifier = Modifier.padding(top = 8.dp),
                 )
+                if (guess != null) {
+                    Text(
+                        "The ${guess.mgPer100Ml} is a guess from ${guess.basis}, not this " +
+                            "product's own figure. Replace it with the label if you have it.",
+                        color = HealthyColors.Caffeine,
+                        fontSize = 11.sp,
+                        modifier = Modifier.padding(top = 6.dp),
+                    )
+                }
                 Row(
                     Modifier.fillMaxWidth().padding(top = 10.dp),
                     horizontalArrangement = Arrangement.End,

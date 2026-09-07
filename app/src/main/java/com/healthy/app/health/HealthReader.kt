@@ -43,6 +43,8 @@ class HealthReader(private val context: Context) {
          */
         val source: String,
         val competingSessions: Int,
+        /** Which app supplied the heart rate, which may differ from the sleep. */
+        val heartRateSource: String? = null,
         /** Individual samples, which spec 18.3 requires over the 30-minute groups. */
         val heartRateSamples: List<Hypnogram.Sample> = emptyList(),
     )
@@ -82,10 +84,17 @@ class HealthReader(private val context: Context) {
             val forThisNight = sessions
                 .filter { HealthyDay.dayOf(it.startTime.toEpochMilli(), zone) == date }
 
+            // With two apps writing the same night, prefer the denser record:
+            // more stage blocks means more detail to work with. Duration only
+            // breaks a tie, so a long featureless session never beats a
+            // shorter one that actually describes the night.
             val session = forThisNight
-                // The longest, in case a nap and the main sleep share a day,
-                // or two apps both wrote the night.
-                .maxByOrNull { it.endTime.toEpochMilli() - it.startTime.toEpochMilli() }
+                .maxWithOrNull(
+                    compareBy(
+                        { it.stages.size },
+                        { it.endTime.toEpochMilli() - it.startTime.toEpochMilli() },
+                    )
+                )
                 ?: return@runCatching Result.NoSession
 
             val start = session.startTime.toEpochMilli()
@@ -116,10 +125,19 @@ class HealthReader(private val context: Context) {
                 )
             ).records
 
+            // Never merge two writers' heart rate: the same beat recorded by
+            // both would appear twice and drag the percentile. Take whichever
+            // source has the most samples inside this night and use only that.
             val nightSamples = heartRecords
-                .flatMap { record -> record.samples }
-                .filter { it.time.toEpochMilli() in start..end }
-                .map { Hypnogram.Sample(it.time.toEpochMilli(), it.beatsPerMinute.toInt()) }
+                .groupBy { it.metadata.dataOrigin.packageName }
+                .mapValues { (_, records) ->
+                    records.flatMap { it.samples }
+                        .filter { sample -> sample.time.toEpochMilli() in start..end }
+                        .map { Hypnogram.Sample(it.time.toEpochMilli(), it.beatsPerMinute.toInt()) }
+                }
+                .maxByOrNull { it.value.size }
+                ?.value
+                .orEmpty()
                 .sortedBy { it.timeMillis }
 
             // Spec 3.3 asks for the 5th percentile of the beats-per-minute
@@ -152,6 +170,10 @@ class HealthReader(private val context: Context) {
                 )
             ).records
                 .filter { it.time.toEpochMilli() in start..end }
+                .groupBy { it.metadata.dataOrigin.packageName }
+                .maxByOrNull { it.value.size }
+                ?.value
+                .orEmpty()
                 .map { it.percentage.value }
 
             Result.Found(
@@ -167,6 +189,16 @@ class HealthReader(private val context: Context) {
                     source = session.metadata.dataOrigin.packageName,
                     competingSessions = forThisNight.size - 1,
                     heartRateSamples = nightSamples,
+                    heartRateSource = heartRecords
+                        .groupBy { it.metadata.dataOrigin.packageName }
+                        .mapValues { (_, r) ->
+                            r.sumOf { rec ->
+                                rec.samples.count { it.time.toEpochMilli() in start..end }
+                            }
+                        }
+                        .filterValues { it > 0 }
+                        .maxByOrNull { it.value }
+                        ?.key,
                 )
             )
         }.getOrElse { Result.Failed(it.message ?: it::class.simpleName ?: "unknown error") }

@@ -31,8 +31,17 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
         /** Known code, drink logged, no network touched. */
         data class Logged(val product: Product, val fromCache: Boolean) : State
 
-        /** Found online but with no caffeine value; the user reads the can. */
-        data class NeedsCaffeine(val product: Product) : State
+        /**
+         * Found online but with no caffeine value; the user reads the can.
+         *
+         * [suggestion] is the closest drink in the built-in catalog by name,
+         * offered as a starting point. It is a guess from a similar product,
+         * never presented as this product's own figure.
+         */
+        data class NeedsCaffeine(
+            val product: Product,
+            val suggestion: CaffeineReference.Guess? = null,
+        ) : State
 
         /** Not in the local table and not in Open Food Facts either. */
         data class Unknown(val barcode: String, val reason: String?) : State
@@ -53,7 +62,7 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
                     logDrink(cached)
                     _state.value = State.Logged(cached, fromCache = true)
                 } else {
-                    _state.value = State.NeedsCaffeine(cached)
+                    _state.value = State.NeedsCaffeine(cached, guessFor(cached))
                 }
                 return@launch
             }
@@ -66,7 +75,7 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
                         logDrink(result.product)
                         _state.value = State.Logged(result.product, fromCache = false)
                     } else {
-                        _state.value = State.NeedsCaffeine(result.product)
+                        _state.value = State.NeedsCaffeine(result.product, guessFor(result.product))
                     }
                 }
 
@@ -125,6 +134,19 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
             name = name,
         )
     }
+
+    /**
+     * A starting figure when the database has none.
+     *
+     * Open Food Facts rarely carries caffeine for colas, and three empty boxes
+     * are little help when the tin is already in the bin. The guess is shown
+     * as a guess, with what it was based on, and the user overwrites it with
+     * whatever the label says.
+     */
+    private fun guessFor(product: Product): CaffeineReference.Guess? =
+        CaffeineReference.forName(
+            listOfNotNull(product.brand, product.name).joinToString(" ")
+        )
 
     fun dismiss() {
         _state.value = State.Idle

@@ -286,6 +286,7 @@ class MorningViewModel(app: Application) : AndroidViewModel(app) {
                             result.data.heartRateSampleCount,
                             result.data.source,
                             result.data.competingSessions,
+                            result.data.heartRateSource,
                         ),
                         syncMessage = buildString {
                             append("Read ")
@@ -310,6 +311,7 @@ class MorningViewModel(app: Application) : AndroidViewModel(app) {
         hrSamples: Int,
         source: String,
         competing: Int,
+        heartSource: String?,
     ): String = buildString {
         if (t.deepMin == null) {
             append("The watch reported no sleep stages for this night.")
@@ -319,11 +321,14 @@ class MorningViewModel(app: Application) : AndroidViewModel(app) {
             append("Wake-ups: ${t.wakeups?.toString() ?: "not reported"}.")
         }
         append(" Heart rate samples: $hrSamples.")
-        append("\nFrom ${source.substringAfterLast('.')}")
+        append("\nSleep from ${source.substringAfterLast('.')}")
         if (competing > 0) {
-            append(", and $competing other session")
-            if (competing > 1) append("s")
-            append(" for this night was ignored; the longest wins")
+            append(", chosen over $competing other")
+            if (competing > 1) append("s") else append(" one")
+            append(" for having more detail")
+        }
+        if (heartSource != null && heartSource != source) {
+            append("; heart rate from ${heartSource.substringAfterLast('.')}")
         }
         append(".")
     }
