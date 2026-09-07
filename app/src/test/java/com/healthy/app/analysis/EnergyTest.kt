@@ -54,10 +54,11 @@ class EnergyTest {
         assertEquals(1768, Energy.basalRate(80.0, 178.0, 30, Energy.Sex.Male))
     }
 
+    /** A negative rate is losing weight, the convention the whole app uses. */
     @Test
-    fun `a half kilo a week comes off the maintenance number`() {
-        // 0.5 kg/week = 3850 kcal/week = 550 a day.
-        val target = Energy.dailyTarget(maintenanceKcal = 2550, rateKgPerWeek = 0.5, basalKcal = 1600)
+    fun `losing half a kilo a week comes off the maintenance number`() {
+        // -0.5 kg/week = -3850 kcal/week = 550 a day less.
+        val target = Energy.dailyTarget(maintenanceKcal = 2550, rateKgPerWeek = -0.5, basalKcal = 1600)
         assertEquals(2000, target.kcal)
         assertFalse(target.clampedToBasal)
     }
@@ -65,14 +66,14 @@ class EnergyTest {
     /** Spec 16.3: the target must never fall below the basal rate. */
     @Test
     fun `an impossible rate is clamped to the basal rate`() {
-        val target = Energy.dailyTarget(maintenanceKcal = 2000, rateKgPerWeek = 1.5, basalKcal = 1600)
+        val target = Energy.dailyTarget(maintenanceKcal = 2000, rateKgPerWeek = -1.5, basalKcal = 1600)
         assertEquals(1600, target.kcal)
         assertTrue("the user must be told the rate is too fast", target.clampedToBasal)
     }
 
     @Test
     fun `gaining weight raises the target above maintenance`() {
-        val target = Energy.dailyTarget(maintenanceKcal = 2500, rateKgPerWeek = -0.25, basalKcal = 1600)
+        val target = Energy.dailyTarget(maintenanceKcal = 2500, rateKgPerWeek = 0.25, basalKcal = 1600)
         assertEquals(2775, target.kcal)
         assertFalse(target.clampedToBasal)
     }

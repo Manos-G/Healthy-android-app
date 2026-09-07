@@ -65,13 +65,18 @@ fun FoodScreen(
     val query by vm.query.collectAsStateWithLifecycle()
     val pending by vm.pendingPortion.collectAsStateWithLifecycle()
     var manual by remember { mutableStateOf(false) }
+    // The day's target, so every calorie figure can say what share of it it is.
+    val energy = androidx.lifecycle.viewmodel.compose.viewModel<com.healthy.app.ui.energy.EnergyViewModel>()
+    val energyState by energy.state.collectAsStateWithLifecycle()
+    val targetKcal = energyState.plan?.targetKcal
 
     LazyColumn(
         modifier = modifier.padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
         contentPadding = PaddingValues(vertical = 14.dp),
     ) {
-        item { TotalsCard(state.totals, state.today.size) }
+        item { com.healthy.app.ui.energy.EnergyCard(vm = energy) }
+        item { TotalsCard(state.totals, state.today.size, targetKcal) }
 
         item {
             SectionCard {
@@ -149,11 +154,18 @@ fun FoodScreen(
                                     fontSize = 11.sp,
                                 )
                             }
-                            Text(
-                                "${item.totals.kcal.toInt()} kcal",
-                                color = HealthyColors.Caffeine,
-                                fontSize = 12.sp,
-                            )
+                            Column(horizontalAlignment = Alignment.End) {
+                                Text(
+                                    "${item.totals.kcal.toInt()} kcal",
+                                    color = HealthyColors.Caffeine,
+                                    fontSize = 12.sp,
+                                )
+                                com.healthy.app.analysis.Energy
+                                    .percentOfTarget(item.totals.kcal, targetKcal)
+                                    ?.let { pct ->
+                                        Text("$pct%", color = HealthyColors.Muted, fontSize = 10.sp)
+                                    }
+                            }
                             IconButton(onClick = { vm.delete(item.entry) }) {
                                 Icon(
                                     Icons.Filled.Close,
@@ -171,6 +183,7 @@ fun FoodScreen(
     pending?.let { product ->
         PortionDialog(
             product = product,
+            targetKcal = targetKcal,
             onLog = { grams, mealType -> vm.log(product, grams, mealType) },
             onDismiss = vm::cancelPortion,
         )
@@ -191,14 +204,19 @@ private fun Long.asClock(): String =
     Instant.ofEpochMilli(this).atZone(ZoneId.systemDefault()).toLocalTime().format(HHMM)
 
 @Composable
-private fun TotalsCard(totals: Nutrition.Totals, count: Int) {
+private fun TotalsCard(totals: Nutrition.Totals, count: Int, targetKcal: Int?) {
     SectionCard {
         Title("Today", "$count item${if (count == 1) "" else "s"} logged.")
         Row(
             modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            Figure("Energy", "${totals.kcal.toInt()}", "kcal")
+            Figure(
+                "Energy",
+                "${totals.kcal.toInt()}",
+                "kcal",
+                percent = com.healthy.app.analysis.Energy.percentOfTarget(totals.kcal, targetKcal),
+            )
             Figure("Protein", "${totals.protein.toInt()}", "g")
             Figure("Carbs", "${totals.carbs.toInt()}", "g")
             Figure("Fat", "${totals.fat.toInt()}", "g")
@@ -224,12 +242,17 @@ private fun TotalsCard(totals: Nutrition.Totals, count: Int) {
 }
 
 @Composable
-private fun Figure(label: String, value: String, unit: String) {
+private fun Figure(label: String, value: String, unit: String, percent: Int? = null) {
     Column {
         Text(label, color = HealthyColors.Muted, fontSize = 10.sp)
         Row(verticalAlignment = Alignment.Bottom) {
             Text(value, color = HealthyColors.Paper, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
             Text(" $unit", color = HealthyColors.Muted, fontSize = 10.sp)
+        }
+        // Absent until a target exists, because spec 12.1 keeps every target
+        // off by default and a percentage of nothing is not a number.
+        if (percent != null) {
+            Text("$percent%", color = HealthyColors.Caffeine, fontSize = 11.sp)
         }
     }
 }
@@ -243,6 +266,7 @@ private fun Figure(label: String, value: String, unit: String) {
 @Composable
 private fun PortionDialog(
     product: Product,
+    targetKcal: Int?,
     onLog: (Double, String) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -290,10 +314,18 @@ private fun PortionDialog(
                 HorizontalDivider(color = HealthyColors.Rule, modifier = Modifier.padding(vertical = 10.dp))
 
                 options.forEach { portion ->
-                    val label = when (portion) {
-                        is Nutrition.Portion.WholePack -> "Whole pack, ${portion.grams.toInt()} g"
-                        is Nutrition.Portion.OneServing -> "One serving, ${portion.grams.toInt()} g"
-                        else -> ""
+                    val kcal = Nutrition.forGrams(product, portion.grams).kcal
+                    val share = com.healthy.app.analysis.Energy.percentOfTarget(kcal, targetKcal)
+                    val label = buildString {
+                        append(
+                            when (portion) {
+                                is Nutrition.Portion.WholePack -> "Whole pack, ${portion.grams.toInt()} g"
+                                is Nutrition.Portion.OneServing -> "One serving, ${portion.grams.toInt()} g"
+                                else -> ""
+                            }
+                        )
+                        if (kcal > 0) append(" — ${kcal.toInt()} kcal")
+                        share?.let { append(", $it% of today") }
                     }
                     OutlinedButton(
                         onClick = { onLog(portion.grams, mealType) },
@@ -333,6 +365,17 @@ private fun PortionDialog(
                     }
                 }
 
+                weighed.toDoubleOrNull()?.takeIf { it > 0 }?.let { grams ->
+                    val kcal = Nutrition.forGrams(product, grams).kcal
+                    val share = com.healthy.app.analysis.Energy.percentOfTarget(kcal, targetKcal)
+                    Text(
+                        "${grams.toInt()} g is ${kcal.toInt()} kcal" +
+                            (share?.let { ", $it% of today's target" } ?: "") + ".",
+                        color = HealthyColors.Sleep,
+                        fontSize = 12.sp,
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                }
                 Text(
                     "A kitchen scale gives a correct number. An estimate by eye is " +
                         "wrong by 30 percent or more.",

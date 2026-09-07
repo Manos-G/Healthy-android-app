@@ -40,6 +40,24 @@ data class HealthySettings(
     val lastNotifiedSleepEnd: Long? = null,
     /** Spec 14.4: an old timestamp shows the system stopped the job. */
     val lastJobRun: Long? = null,
+
+    /**
+     * Only used for the Mifflin-St Jeor start value and the basal floor
+     * (spec 16.2, 16.3). Once the measured window fills, the estimate is
+     * replaced and these stop affecting the target at all.
+     */
+    val heightCm: Double? = null,
+    val ageYears: Int? = null,
+    val sexMale: Boolean? = null,
+
+    /** Where the change goal is heading. A destination, never a deadline. */
+    val goalTargetKg: Double? = null,
+
+    /** The last calculated maintenance energy, and what it was based on. */
+    val maintenanceKcal: Int? = null,
+    val maintenanceMeasured: Boolean = false,
+    val maintenanceDays: Int = 0,
+    val maintenanceCalculatedAt: Long? = null,
 ) {
     companion object {
         const val DEFAULT_BEDTIME = "23:30"
@@ -72,6 +90,14 @@ class SettingsStore(private val context: Context) {
             notifyEnabled = prefs[KEY_NOTIFY] ?: false,
             lastNotifiedSleepEnd = prefs[KEY_LAST_NOTIFIED],
             lastJobRun = prefs[KEY_LAST_JOB],
+            heightCm = prefs[KEY_HEIGHT],
+            ageYears = prefs[KEY_AGE],
+            sexMale = prefs[KEY_SEX_MALE],
+            goalTargetKg = prefs[KEY_GOAL_TARGET],
+            maintenanceKcal = prefs[KEY_MAINT_KCAL],
+            maintenanceMeasured = prefs[KEY_MAINT_MEASURED] ?: false,
+            maintenanceDays = prefs[KEY_MAINT_DAYS] ?: 0,
+            maintenanceCalculatedAt = prefs[KEY_MAINT_AT],
         )
     }
 
@@ -94,6 +120,21 @@ class SettingsStore(private val context: Context) {
     suspend fun setLastNotifiedSleepEnd(value: Long) = edit { it[KEY_LAST_NOTIFIED] = value }
 
     suspend fun setLastJobRun(value: Long) = edit { it[KEY_LAST_JOB] = value }
+
+    suspend fun setBody(heightCm: Double?, ageYears: Int?, sexMale: Boolean?) = edit {
+        heightCm?.let { v -> it[KEY_HEIGHT] = v }
+        ageYears?.let { v -> it[KEY_AGE] = v }
+        sexMale?.let { v -> it[KEY_SEX_MALE] = v }
+    }
+
+    suspend fun setGoalTargetKg(value: Double) = edit { it[KEY_GOAL_TARGET] = value }
+
+    suspend fun setMaintenance(kcal: Int, measured: Boolean, days: Int) = edit {
+        it[KEY_MAINT_KCAL] = kcal
+        it[KEY_MAINT_MEASURED] = measured
+        it[KEY_MAINT_DAYS] = days
+        it[KEY_MAINT_AT] = System.currentTimeMillis()
+    }
 
     /** Clearing the goal removes its values rather than leaving them stale. */
     suspend fun setNoGoal() = edit {
@@ -140,5 +181,16 @@ class SettingsStore(private val context: Context) {
             androidx.datastore.preferences.core.longPreferencesKey("last_notified_sleep_end")
         val KEY_LAST_JOB: Preferences.Key<Long> =
             androidx.datastore.preferences.core.longPreferencesKey("last_job_run")
+        val KEY_HEIGHT: Preferences.Key<Double> = doublePreferencesKey("height_cm")
+        val KEY_AGE: Preferences.Key<Int> = intPreferencesKey("age_years")
+        val KEY_SEX_MALE: Preferences.Key<Boolean> =
+            androidx.datastore.preferences.core.booleanPreferencesKey("sex_male")
+        val KEY_GOAL_TARGET: Preferences.Key<Double> = doublePreferencesKey("goal_target_kg")
+        val KEY_MAINT_KCAL: Preferences.Key<Int> = intPreferencesKey("maintenance_kcal")
+        val KEY_MAINT_MEASURED: Preferences.Key<Boolean> =
+            androidx.datastore.preferences.core.booleanPreferencesKey("maintenance_measured")
+        val KEY_MAINT_DAYS: Preferences.Key<Int> = intPreferencesKey("maintenance_days")
+        val KEY_MAINT_AT: Preferences.Key<Long> =
+            androidx.datastore.preferences.core.longPreferencesKey("maintenance_at")
     }
 }

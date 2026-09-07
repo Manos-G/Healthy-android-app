@@ -97,8 +97,16 @@ object Energy {
     /**
      * The daily energy target (spec 16.3).
      *
+     * **A negative rate means losing weight**, matching the rest of the app:
+     * a goal is a weight change per week, so -0.5 is half a kilo off. Spec
+     * 16.3 writes the formula with the opposite sign, subtracting a rate it
+     * treats as positive-for-loss, and WeightGoal already used the negative
+     * convention. Following the spec literally here made the two disagree, and
+     * the app would have raised the target when the user asked to lose weight.
+     * One convention, stated once, is worth more than matching the prose.
+     *
      * ```
-     * target = TDEE - (rate in kg each week x 7700 / 7)
+     * target = maintenance + (rate in kg each week x 7700 / 7)
      * ```
      *
      * Floored at the basal metabolic rate. A target below the energy the body
@@ -106,12 +114,77 @@ object Energy {
      * floor wins and the caller is told the chosen rate is too fast.
      */
     fun dailyTarget(maintenanceKcal: Int, rateKgPerWeek: Double, basalKcal: Int): Target {
-        val raw = maintenanceKcal - (rateKgPerWeek * KCAL_PER_KG / 7.0)
+        val raw = maintenanceKcal + (rateKgPerWeek * KCAL_PER_KG / 7.0)
         return if (raw < basalKcal) {
             Target(kcal = basalKcal, clampedToBasal = true, basalKcal = basalKcal)
         } else {
             Target(kcal = raw.roundToInt(), clampedToBasal = false, basalKcal = basalKcal)
         }
+    }
+
+    /**
+     * Everything the energy target needs, computed together (spec 16).
+     *
+     * The maintenance figure is measured wherever possible. A formula from
+     * height, weight, age and sex is often 300 kcal wrong, and this app holds
+     * the two things that give the real answer: what was eaten, and what the
+     * weight trend did about it.
+     */
+    data class Plan(
+        val maintenance: Maintenance,
+        val targetKcal: Int,
+        val clampedToBasal: Boolean,
+        val basalKcal: Int,
+        val rateKgPerWeek: Double,
+        /** Weeks to the goal weight at this rate. A consequence, never a deadline. */
+        val weeksToTarget: Int?,
+    )
+
+    fun plan(
+        maintenance: Maintenance,
+        rateKgPerWeek: Double,
+        basalKcal: Int,
+        currentKg: Double?,
+        targetKg: Double?,
+    ): Plan {
+        val target = dailyTarget(maintenance.kcal, rateKgPerWeek, basalKcal)
+        return Plan(
+            maintenance = maintenance,
+            targetKcal = target.kcal,
+            clampedToBasal = target.clampedToBasal,
+            basalKcal = basalKcal,
+            rateKgPerWeek = rateKgPerWeek,
+            weeksToTarget = weeksToTarget(currentKg, targetKg, rateKgPerWeek),
+        )
+    }
+
+    /**
+     * How long the chosen rate would take to cover the remaining distance.
+     *
+     * Shown as an outcome of the rate, not as something the user sets: spec
+     * 8.5 forbids a date, because a missed date makes an app demand a larger
+     * deficit every week. Null when the rate points the wrong way.
+     */
+    fun weeksToTarget(currentKg: Double?, targetKg: Double?, rateKgPerWeek: Double): Int? {
+        if (currentKg == null || targetKg == null || rateKgPerWeek == 0.0) return null
+        val distance = targetKg - currentKg
+        if (distance == 0.0) return 0
+        // A negative rate means losing; the signs have to agree or the rate
+        // never arrives.
+        if (distance > 0 != rateKgPerWeek > 0) return null
+        return Math.ceil(distance / rateKgPerWeek).toInt()
+    }
+
+    /**
+     * What fraction of the day's target a number of calories represents.
+     *
+     * Returned as a plain percentage so the caller can show it beside every
+     * figure. Null when there is no target to be a fraction of, which is the
+     * default state: spec 12.1 keeps every target off until asked for.
+     */
+    fun percentOfTarget(kcal: Double, targetKcal: Int?): Int? {
+        if (targetKcal == null || targetKcal <= 0) return null
+        return Math.round(kcal / targetKcal * 100).toInt()
     }
 
     /** Basal metabolic rate: Mifflin-St Jeor with no activity multiplier. */
