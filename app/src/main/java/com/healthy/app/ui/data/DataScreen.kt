@@ -34,6 +34,11 @@ fun DataScreen(
     modifier: Modifier = Modifier,
     vm: DataViewModel = viewModel(),
 ) {
+    var showSources by remember { mutableStateOf(false) }
+    if (showSources) {
+        com.healthy.app.ui.sources.SourcesScreen(onClose = { showSources = false })
+        return
+    }
     val status by vm.status.collectAsStateWithLifecycle()
     val counts by vm.counts.collectAsStateWithLifecycle()
     val surveyText by vm.survey.collectAsStateWithLifecycle()
@@ -150,6 +155,35 @@ fun DataScreen(
                         fontSize = 12.sp,
                         modifier = Modifier.padding(top = 10.dp),
                     )
+                }
+            }
+        }
+
+        item {
+            SectionCard {
+                Text(
+                    "Where the numbers come from",
+                    color = HealthyColors.Paper,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    "Every value this app calculates with, why it was chosen, and what it does not tell you.",
+                    color = HealthyColors.Muted,
+                    fontSize = 12.sp,
+                    modifier = Modifier.padding(top = 4.dp, bottom = 10.dp),
+                )
+                OutlinedButton(
+                    onClick = { showSources = true },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp),
+                    border = BorderStroke(1.dp, HealthyColors.Rule),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        containerColor = HealthyColors.Raised2,
+                        contentColor = HealthyColors.Paper,
+                    ),
+                ) {
+                    Text("Sources and references", fontSize = 14.sp)
                 }
             }
         }
