@@ -65,10 +65,20 @@ fun FoodScreen(
     val query by vm.query.collectAsStateWithLifecycle()
     val pending by vm.pendingPortion.collectAsStateWithLifecycle()
     var manual by remember { mutableStateOf(false) }
+    var showRecipes by remember { mutableStateOf(false) }
     // The day's target, so every calorie figure can say what share of it it is.
     val energy = androidx.lifecycle.viewmodel.compose.viewModel<com.healthy.app.ui.energy.EnergyViewModel>()
     val energyState by energy.state.collectAsStateWithLifecycle()
     val targetKcal = energyState.plan?.targetKcal
+
+    if (showRecipes) {
+        com.healthy.app.ui.recipe.RecipeScreen(
+            onClose = { showRecipes = false },
+            modifier = modifier,
+            targetKcal = targetKcal,
+        )
+        return
+    }
 
     LazyColumn(
         modifier = modifier.padding(horizontal = 16.dp),
@@ -116,6 +126,9 @@ fun FoodScreen(
                 }
                 TextButton(onClick = { manual = true }) {
                     Text("Type a food with no barcode", color = HealthyColors.Sleep, fontSize = 13.sp)
+                }
+                TextButton(onClick = { showRecipes = true }) {
+                    Text("Recipes", color = HealthyColors.Sleep, fontSize = 13.sp)
                 }
             }
         }
