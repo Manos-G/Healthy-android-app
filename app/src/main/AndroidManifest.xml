@@ -2,13 +2,25 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <!--
-      Step 1 declares no permissions at all.
+      Health Connect reads (spec 3.2). Weight and hydration writes arrive in
+      step 7 with the screens that use them; menstruation only if the user
+      turns that toggle on (spec 10.2). Nothing is declared before the step
+      that uses it.
 
-      INTERNET arrives in step 8 with the barcode scanner and is bound to
+      INTERNET arrives in step 8 with the barcode scanner, bound to
       world.openfoodfacts.org by a network security configuration (spec 11.5).
-      The Health Connect permissions arrive in step 4. Nothing is requested
-      before the step that uses it.
     -->
+    <uses-permission android:name="android.permission.health.READ_SLEEP" />
+    <uses-permission android:name="android.permission.health.READ_HEART_RATE" />
+    <uses-permission android:name="android.permission.health.READ_OXYGEN_SATURATION" />
+
+    <!-- Lets the app check whether a Health Connect provider is installed. -->
+    <queries>
+        <package android:name="com.google.android.apps.healthdata" />
+        <intent>
+            <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
+        </intent>
+    </queries>
 
     <application
         android:name=".HealthyApplication"
@@ -27,5 +39,36 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!--
+          Health Connect refuses an app with no rationale screen (spec 3.2).
+          It opens this from its own settings, so it must be exported and must
+          be a separate activity rather than a tab inside the app.
+
+          Exactly one activity may answer this action. Declaring it on the
+          launcher activity as well made the intent resolve to the system
+          chooser, so Health Connect would have shown a disambiguation dialog
+          instead of the rationale.
+        -->
+        <activity
+            android:name=".health.PermissionsRationaleActivity"
+            android:exported="true"
+            android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
+            </intent-filter>
+        </activity>
+
+        <!-- The pre-Android-14 route to the same screen. -->
+        <activity-alias
+            android:name="ViewPermissionUsageActivity"
+            android:exported="true"
+            android:targetActivity=".health.PermissionsRationaleActivity"
+            android:permission="android.permission.START_VIEW_PERMISSION_USAGE">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW_PERMISSION_USAGE" />
+                <category android:name="android.intent.category.HEALTH_PERMISSIONS" />
+            </intent-filter>
+        </activity-alias>
     </application>
 </manifest>

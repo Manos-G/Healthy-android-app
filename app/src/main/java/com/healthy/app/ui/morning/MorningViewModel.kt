@@ -6,6 +6,8 @@ import androidx.lifecycle.viewModelScope
 import com.healthy.app.core.HealthyDay
 import com.healthy.app.data.HealthyDatabase
 import com.healthy.app.data.entity.Night
+import com.healthy.app.health.HealthConnect
+import com.healthy.app.ui.health.HealthConnectUiState
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -85,6 +87,11 @@ class MorningViewModel(app: Application) : AndroidViewModel(app) {
     private val nights = db.nightDao()
     private val drinks = db.drinkDao()
 
+    private val _health = MutableStateFlow(
+        HealthConnectUiState(HealthConnect.availability(app), isGranted = false)
+    )
+    val health: StateFlow<HealthConnectUiState> = _health.asStateFlow()
+
     private val _form = MutableStateFlow(MorningForm())
     val form: StateFlow<MorningForm> = _form.asStateFlow()
 
@@ -96,6 +103,7 @@ class MorningViewModel(app: Application) : AndroidViewModel(app) {
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptySet())
 
     init {
+        refreshHealthConnect()
         viewModelScope.launch {
             selectedDate.flatMapLatest { date -> nights.observe(date) }.collect { night ->
                 load(night, selectedDate.value)
@@ -133,6 +141,16 @@ class MorningViewModel(app: Application) : AndroidViewModel(app) {
                 caffeineCount = dayDrinks.size,
                 existing = true,
             )
+        }
+    }
+
+    /** Re-reads availability and granted permissions (spec 3.1, 3.2). */
+    fun refreshHealthConnect() {
+        val app = getApplication<Application>()
+        viewModelScope.launch {
+            val availability = HealthConnect.availability(app)
+            val granted = runCatching { HealthConnect.hasAllReadPermissions(app) }.getOrDefault(false)
+            _health.value = HealthConnectUiState(availability, granted)
         }
     }
 

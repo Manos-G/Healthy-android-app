@@ -92,6 +92,7 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.tooling)
 
     implementation(libs.androidx.datastore.preferences)
+    implementation(libs.androidx.health.connect)
 
     implementation(libs.kotlinx.coroutines.android)
 

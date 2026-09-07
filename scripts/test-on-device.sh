@@ -9,5 +9,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 ./scripts/backup-db.sh
 echo
-echo "Running device tests. This will uninstall the app and wipe its data."
+echo "Running device tests."
+echo "The uninstall wipes the database AND revokes the Health Connect grants."
+echo "Reconnect from the Morning tab afterwards."
 ./gradlew "${@:-connectedDebugAndroidTest}"

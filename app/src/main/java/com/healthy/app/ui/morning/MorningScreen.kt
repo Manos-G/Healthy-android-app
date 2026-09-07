@@ -40,6 +40,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.healthy.app.ui.components.RatingScale
+import com.healthy.app.ui.health.HealthConnectCard
 import com.healthy.app.ui.theme.HealthyColors
 
 @Composable
@@ -49,6 +50,7 @@ fun MorningScreen(
 ) {
     val form by vm.form.collectAsStateWithLifecycle()
     val saved by vm.savedDates.collectAsStateWithLifecycle()
+    val health by vm.health.collectAsStateWithLifecycle()
 
     LazyColumn(
         modifier = modifier.padding(horizontal = 16.dp),
@@ -56,6 +58,7 @@ fun MorningScreen(
         contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 14.dp),
     ) {
         item { DateCard(form, saved, vm) }
+        item { HealthConnectCard(health, onGranted = vm::refreshHealthConnect) }
         item { SleepCard(form, vm) }
         item { AlertnessCard(form, vm) }
         item { ContextCard(form, vm) }

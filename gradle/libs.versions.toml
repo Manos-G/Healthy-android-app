@@ -7,6 +7,7 @@ kotlin = "2.2.21"
 # identical to `kotlin` above or the build fails at configuration time.
 ksp = "2.2.21-2.0.5"
 room = "2.8.4"
+healthConnect = "1.1.0"
 composeBom = "2026.06.01"
 activityCompose = "1.12.4"
 lifecycle = "2.9.4"
@@ -29,6 +30,7 @@ androidx-compose-ui-tooling-preview = { module = "androidx.compose.ui:ui-tooling
 androidx-datastore-preferences = { module = "androidx.datastore:datastore-preferences", version.ref = "datastore" }
 androidx-lifecycle-runtime-compose = { module = "androidx.lifecycle:lifecycle-runtime-compose", version.ref = "lifecycle" }
 androidx-lifecycle-viewmodel-compose = { module = "androidx.lifecycle:lifecycle-viewmodel-compose", version.ref = "lifecycle" }
+androidx-health-connect = { module = "androidx.health.connect:connect-client", version.ref = "healthConnect" }
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "coreKtx" }
 kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "coroutines" }
 
