@@ -108,6 +108,103 @@ fun WeightScreen(
         }
 
         item { TrendCard(state) }
+        if (state.bodyFatPoints.size >= 2) {
+            item { BodyFatCard(state) }
+        }
+        item { ImportCard(vm) }
+    }
+}
+
+/**
+ * Body fat, smoothed like the weight (spec 8.4). Shown only when a scale has
+ * actually measured it; a dumb scale leaves this card off the screen entirely
+ * rather than drawing a flat zero.
+ */
+@Composable
+private fun BodyFatCard(state: WeightState) {
+    SectionCard {
+        Text("Body fat", color = HealthyColors.Paper, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+        val latest = state.bodyFatPoints.last()
+        Text(
+            "${"%.1f".format(latest.weightKg)} percent measured, " +
+                "${"%.1f".format(latest.trendKg)} percent smoothed.",
+            color = HealthyColors.Sleep,
+            fontSize = 13.sp,
+            modifier = Modifier.padding(top = 4.dp),
+        )
+        Canvas(Modifier.fillMaxWidth().height(90.dp).padding(top = 12.dp)) {
+            val points = state.bodyFatPoints
+            val w = size.width
+            val h = size.height
+            val values = points.flatMap { listOf(it.weightKg, it.trendKg) }
+            val lo = values.min() - 0.5
+            val hi = values.max() + 0.5
+            val span = (hi - lo).coerceAtLeast(0.1)
+            val step = if (points.size > 1) w / (points.size - 1) else w
+            fun y(v: Double) = (h - ((v - lo) / span).toFloat() * (h - 8f) - 4f)
+
+            points.forEachIndexed { i, p ->
+                drawCircle(
+                    color = HealthyColors.Muted.copy(alpha = 0.5f),
+                    radius = 2.5f,
+                    center = Offset(i * step, y(p.weightKg)),
+                )
+            }
+            val path = Path()
+            points.forEachIndexed { i, p ->
+                val x = i * step
+                val yy = y(p.trendKg)
+                if (i == 0) path.moveTo(x, yy) else path.lineTo(x, yy)
+            }
+            drawPath(path, color = HealthyColors.Caffeine, style = Stroke(width = 3f))
+        }
+        Text(
+            "A bioimpedance scale estimates body composition from electrical " +
+                "resistance. Hydration changes the result. The trend across weeks " +
+                "is useful. One reading is not.",
+            color = HealthyColors.Muted,
+            fontSize = 12.sp,
+            modifier = Modifier.padding(top = 12.dp),
+        )
+    }
+}
+
+@Composable
+private fun ImportCard(vm: WeightViewModel) {
+    val status by vm.importStatus.collectAsStateWithLifecycle()
+    val picker = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.OpenDocument()
+    ) { uri -> if (uri != null) vm.importOpenScale(uri) }
+
+    SectionCard {
+        Text("From a scale", color = HealthyColors.Paper, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+        Text(
+            "OpenScale reads Bluetooth scales and exports a CSV. Import it here. " +
+                "A date already stored is left alone, so re-importing is safe.",
+            color = HealthyColors.Muted,
+            fontSize = 12.sp,
+            modifier = Modifier.padding(top = 4.dp, bottom = 10.dp),
+        )
+        androidx.compose.material3.OutlinedButton(
+            onClick = { picker.launch(arrayOf("text/csv", "text/comma-separated-values", "*/*")) },
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(10.dp),
+            border = androidx.compose.foundation.BorderStroke(1.dp, HealthyColors.Rule),
+            colors = ButtonDefaults.outlinedButtonColors(
+                containerColor = HealthyColors.Raised2,
+                contentColor = HealthyColors.Paper,
+            ),
+        ) {
+            Text("Import OpenScale CSV", fontSize = 14.sp)
+        }
+        if (status != null) {
+            Text(
+                status.orEmpty(),
+                color = HealthyColors.Sleep,
+                fontSize = 12.sp,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+        }
     }
 }
 
