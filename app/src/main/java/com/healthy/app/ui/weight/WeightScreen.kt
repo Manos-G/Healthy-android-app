@@ -41,7 +41,9 @@ fun WeightScreen(
     vm: WeightViewModel = viewModel(),
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
-    var picked by remember { mutableStateOf<Double?>(null) }
+    // Cleared when the latest reading changes, so a value picked against the
+    // empty-state range cannot survive into the real one.
+    var picked by remember(state.latest?.date) { mutableStateOf<Double?>(null) }
     var status by remember { mutableStateOf<String?>(null) }
 
     LazyColumn(

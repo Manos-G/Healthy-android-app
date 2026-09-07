@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -58,12 +57,29 @@ fun WeightWheel(
         values.indexOfFirst { it >= target - 0.001 }.coerceAtLeast(0)
     }
 
-    val listState = rememberLazyListState(initialFirstVisibleItemIndex = startIndex)
+    /*
+     * Rebuilt when the range changes, not merely remembered.
+     *
+     * The weight list arrives asynchronously, so this composes first with no
+     * previous reading — range 40 to 150, some 1100 cells — and again once the
+     * reading loads with a 61-cell range. A state remembered across that
+     * change keeps a scroll index from the old list, which clamps to the end:
+     * the marker sat on the highest weight in range and the Save button still
+     * held a value from the range before it.
+     */
+    val listState = remember(values, startIndex) {
+        androidx.compose.foundation.lazy.LazyListState(startIndex, 0)
+    }
     val fling = rememberSnapFlingBehavior(lazyListState = listState)
     val cellPx = with(androidx.compose.ui.platform.LocalDensity.current) { CELL_WIDTH.dp.toPx() }
 
     /*
      * The item under the marker, allowing for a part-scrolled cell.
+     *
+     * Keyed on the list state as well as the range. Without those keys this
+     * kept reading the state object from the first composition, so once the
+     * range shrank it reported an index that no longer existed and the
+     * carousel showed nothing at all.
      *
      * The marker sits at the centre of the viewport, so the side padding has
      * to be exactly half the viewport minus half a cell for the first visible
@@ -71,7 +87,7 @@ fun WeightWheel(
      * put the reported value three cells away from the one being pointed at,
      * which is the second time this carousel has disagreed with itself.
      */
-    val selectedIndex by remember {
+    val selectedIndex by remember(listState, values) {
         derivedStateOf {
             val nudge = if (listState.firstVisibleItemScrollOffset > cellPx / 2) 1 else 0
             (listState.firstVisibleItemIndex + nudge).coerceIn(0, values.lastIndex)
@@ -81,7 +97,9 @@ fun WeightWheel(
 
     // One source of truth: whatever sits under the marker is what is reported,
     // so the big number, the ruler and the button cannot disagree.
-    LaunchedEffect(Unit) {
+    // Keyed on the state and the range, so a rebuilt carousel re-reports its
+    // value instead of leaving the caller holding the previous range's answer.
+    LaunchedEffect(listState, values) {
         snapshotFlow { selectedIndex }
             .collect { index -> values.getOrNull(index)?.let(onValueChange) }
     }
