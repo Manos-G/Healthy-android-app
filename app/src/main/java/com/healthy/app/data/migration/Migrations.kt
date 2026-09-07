@@ -1,6 +1,7 @@
 package com.healthy.app.data.migration
 
 import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 
 /**
  * The migration strategy for this app.
@@ -25,11 +26,27 @@ import androidx.room.migration.Migration
  *
  * 4. **Every migration gets a test.** `MigrationTest` walks the whole chain
  *    against the exported schemas before the build is called done.
- *
- * Version 1 creates every table in one go, so the list below is empty. It
- * stays here so that step 2 has an obvious place to add the first entry.
  */
 object Migrations {
 
-    val ALL: Array<Migration> = arrayOf()
+    /**
+     * Step 2 adds the `custom_drink` table (spec 7). Purely additive: no
+     * existing table is touched, so no data can be lost.
+     */
+    val MIGRATION_1_2 = object : Migration(1, 2) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS `custom_drink` (
+                    `id` INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                    `name` TEXT NOT NULL,
+                    `mg` INTEGER NOT NULL,
+                    `volumeMl` INTEGER NOT NULL
+                )
+                """.trimIndent()
+            )
+        }
+    }
+
+    val ALL: Array<Migration> = arrayOf(MIGRATION_1_2)
 }

@@ -1,6 +1,7 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)
 }
 
@@ -16,6 +17,10 @@ android {
         versionName = "0.1-step1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    buildFeatures {
+        compose = true
     }
 
     buildTypes {
@@ -50,11 +55,43 @@ ksp {
     arg("room.generateKotlin", "true")
 }
 
+// room-testing parses the exported schema JSON with kotlinx-serialization.
+// The Kotlin plugin pins serialization-core to "strictly 1.7.3", while
+// room-migration brings serialization-json 1.8.1; the mismatched halves throw
+// AbstractMethodError at runtime. Forcing both halves to 1.8.1 fixes it.
+//
+// REVISIT AT STEP 17. This force is currently test-only, because nothing in
+// the app uses serialization. Step 17 adds the JSON export. If that export is
+// written with kotlinx-serialization, this force starts governing production
+// code and must be re-checked against the runtime the app ships with, rather
+// than left as a test-path workaround nobody reads.
+configurations.configureEach {
+    resolutionStrategy {
+        force("org.jetbrains.kotlinx:kotlinx-serialization-core:1.8.1")
+        force("org.jetbrains.kotlinx:kotlinx-serialization-core-jvm:1.8.1")
+    }
+}
+
 // MigrationTestHelper reads the exported schema JSON from the test APK assets.
 android.sourceSets.getByName("androidTest").assets.srcDirs("$projectDir/schemas")
 
 dependencies {
     implementation(libs.androidx.core.ktx)
+
+    val composeBom = platform(libs.androidx.compose.bom)
+    implementation(composeBom)
+    androidTestImplementation(composeBom)
+    implementation(libs.androidx.compose.ui)
+    implementation(libs.androidx.compose.ui.graphics)
+    implementation(libs.androidx.compose.ui.tooling.preview)
+    implementation(libs.androidx.compose.material3)
+    implementation(libs.androidx.compose.material.icons)
+    implementation(libs.androidx.activity.compose)
+    implementation(libs.androidx.lifecycle.runtime.compose)
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
+    debugImplementation(libs.androidx.compose.ui.tooling)
+
+    implementation(libs.androidx.datastore.preferences)
 
     implementation(libs.kotlinx.coroutines.android)
 

@@ -4,6 +4,8 @@ import androidx.room.testing.MigrationTestHelper
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.healthy.app.data.migration.Migrations
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -32,9 +34,35 @@ class MigrationTest {
         helper.createDatabase(TEST_DB, 1).close()
     }
 
+    /** Step 2 adds `custom_drink`. The upgrade must keep existing rows. */
+    @Test
+    @Throws(IOException::class)
+    fun migration1To2AddsCustomDrinkAndKeepsData() {
+        helper.createDatabase(TEST_DB, 1).apply {
+            execSQL(
+                "INSERT INTO drink (name, mg, timestamp, volumeMl) " +
+                    "VALUES ('Freddo espresso', 125, 1772000000000, 200)"
+            )
+            close()
+        }
+
+        val db = helper.runMigrationsAndValidate(TEST_DB, 2, true, Migrations.MIGRATION_1_2)
+
+        db.query("SELECT name, mg FROM drink").use { c ->
+            assertTrue("the pre-migration drink must survive", c.moveToFirst())
+            assertEquals("Freddo espresso", c.getString(0))
+            assertEquals(125, c.getInt(1))
+        }
+        db.query("SELECT COUNT(*) FROM custom_drink").use { c ->
+            assertTrue(c.moveToFirst())
+            assertEquals(0, c.getInt(0))
+        }
+        db.close()
+    }
+
     /**
      * Opens the current schema through the real builder and runs every
-     * migration in [Migrations.ALL]. Empty today; the guard matters later.
+     * migration in [Migrations.ALL].
      */
     @Test
     @Throws(IOException::class)

@@ -6,6 +6,7 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import com.healthy.app.data.converter.EditedFieldsConverter
+import com.healthy.app.data.dao.CustomDrinkDao
 import com.healthy.app.data.dao.DrinkDao
 import com.healthy.app.data.dao.MealDao
 import com.healthy.app.data.dao.NightDao
@@ -13,6 +14,7 @@ import com.healthy.app.data.dao.NoteDao
 import com.healthy.app.data.dao.ProductDao
 import com.healthy.app.data.dao.RecipeDao
 import com.healthy.app.data.dao.WeightDao
+import com.healthy.app.data.entity.CustomDrink
 import com.healthy.app.data.entity.Drink
 import com.healthy.app.data.entity.MealEntry
 import com.healthy.app.data.entity.Night
@@ -30,6 +32,7 @@ import com.healthy.app.data.migration.Migrations
         Night::class,
         StageBlock::class,
         Drink::class,
+        CustomDrink::class,
         Weight::class,
         Product::class,
         MealEntry::class,
@@ -46,6 +49,7 @@ abstract class HealthyDatabase : RoomDatabase() {
 
     abstract fun nightDao(): NightDao
     abstract fun drinkDao(): DrinkDao
+    abstract fun customDrinkDao(): CustomDrinkDao
     abstract fun weightDao(): WeightDao
     abstract fun productDao(): ProductDao
     abstract fun mealDao(): MealDao
@@ -53,7 +57,7 @@ abstract class HealthyDatabase : RoomDatabase() {
     abstract fun noteDao(): NoteDao
 
     companion object {
-        const val VERSION = 1
+        const val VERSION = 2
         const val NAME = "healthy.db"
 
         @Volatile
