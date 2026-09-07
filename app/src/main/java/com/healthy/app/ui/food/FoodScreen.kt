@@ -78,6 +78,9 @@ fun FoodScreen(
                 Title("Add something", "Scan it, search what you have eaten before, or type it once.")
                 com.healthy.app.scan.ScanButton(
                     modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
+                    suggestedKind = Product.KIND_FOOD,
+                    label = "Scan a food",
+                    onFood = vm::choosePortionFor,
                 )
                 OutlinedTextField(
                     value = query,

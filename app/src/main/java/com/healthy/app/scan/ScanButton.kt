@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.healthy.app.data.entity.Product
 import com.healthy.app.ui.theme.HealthyColors
 import com.journeyapps.barcodescanner.ScanContract
 import com.journeyapps.barcodescanner.ScanOptions
@@ -40,12 +41,17 @@ import com.journeyapps.barcodescanner.ScanOptions
 @Composable
 fun ScanButton(
     modifier: Modifier = Modifier,
+    /** Which kind the screen expects; only pre-selects for a new barcode. */
+    suggestedKind: String = Product.KIND_DRINK,
+    /** Where a food goes. The food screen asks how much was eaten. */
+    onFood: ((Product) -> Unit)? = null,
+    label: String = "Scan a barcode",
     vm: ScanViewModel = viewModel(),
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
 
     val scanner = rememberLauncherForActivityResult(ScanContract()) { result ->
-        result.contents?.let(vm::onBarcode)
+        result.contents?.let { vm.onBarcode(it, suggestedKind) }
     }
     val cameraPermission = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -70,7 +76,7 @@ fun ScanButton(
             contentColor = HealthyColors.Paper,
         ),
     ) {
-        Text("Scan a barcode", fontSize = 14.sp)
+        Text(label, fontSize = 14.sp)
     }
 
     when (val s = state) {
@@ -97,16 +103,52 @@ fun ScanButton(
             onDismiss = vm::dismiss,
         )
 
-        is ScanViewModel.State.Unknown -> CaffeineDialog(
-            productName = "",
-            initialVolume = null,
-            heading = s.reason?.let { "Could not reach Open Food Facts. Type it once instead." }
-                ?: "Not in Open Food Facts. Type it once and it is stored.",
-            onSave = { mg, perMl, totalMl, name ->
-                vm.saveNewProduct(s.barcode, name, mg, perMl, totalMl)
-            },
+        is ScanViewModel.State.Unknown -> if (suggestedKind == Product.KIND_FOOD) {
+            // A food needs values for 100 g, not a caffeine figure, and that
+            // form already exists on the food screen.
+            ResultDialog(
+                title = "Not found",
+                body = (s.reason?.let { "Could not reach Open Food Facts. " }
+                    ?: "This barcode is not in Open Food Facts. ") +
+                    "Use \"Type a food with no barcode\" below to enter it once.",
+                onDismiss = vm::dismiss,
+            )
+        } else {
+            CaffeineDialog(
+                productName = "",
+                initialVolume = null,
+                heading = s.reason?.let { "Could not reach Open Food Facts. Type it once instead." }
+                    ?: "Not in Open Food Facts. Type it once and it is stored.",
+                onSave = { mg, perMl, totalMl, name ->
+                    vm.saveNewProduct(s.barcode, name, mg, perMl, totalMl)
+                },
+                onDismiss = vm::dismiss,
+            )
+        }
+
+        is ScanViewModel.State.NeedsKind -> KindDialog(
+            product = s.product,
+            onChoose = { kind -> vm.chooseKind(s.product, kind) },
             onDismiss = vm::dismiss,
         )
+
+        is ScanViewModel.State.NeedsPortion -> {
+            // Handing the product on is the food screen's job; from anywhere
+            // else this says so rather than silently doing nothing.
+            if (onFood != null) {
+                androidx.compose.runtime.LaunchedEffect(s.product.barcode) {
+                    onFood(s.product)
+                    vm.dismiss()
+                }
+            } else {
+                ResultDialog(
+                    title = s.product.name,
+                    body = "This is stored as a food. Log it from the Food tab, " +
+                        "where the app can ask how much you ate.",
+                    onDismiss = vm::dismiss,
+                )
+            }
+        }
 
         is ScanViewModel.State.Working -> ResultDialog(
             title = "Looking up",
@@ -123,6 +165,65 @@ private fun scanOptions() = ScanOptions().apply {
     setPrompt("Point at the barcode")
     setBeepEnabled(false)
     setOrientationLocked(false)
+}
+
+/**
+ * Spec 11.1: a new barcode asks which kind it is.
+ *
+ * The two answers lead to completely different questions — caffeine for a
+ * drink, a portion for a food — so guessing wrong costs the user two dialogs
+ * instead of one.
+ */
+@Composable
+private fun KindDialog(product: Product, onChoose: (String) -> Unit, onDismiss: () -> Unit) {
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = HealthyColors.Raised),
+        ) {
+            Column(Modifier.padding(18.dp)) {
+                Text(
+                    listOfNotNull(product.brand, product.name).joinToString(" ").trim()
+                        .ifBlank { product.name },
+                    color = HealthyColors.Paper,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    "New to this app. Which is it? A drink is logged for its caffeine " +
+                        "and fluid; a food is logged for its weight and nutrients.",
+                    color = HealthyColors.Muted,
+                    fontSize = 12.sp,
+                    modifier = Modifier.padding(top = 6.dp, bottom = 12.dp),
+                )
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(
+                        onClick = { onChoose(Product.KIND_DRINK) },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(10.dp),
+                        border = BorderStroke(1.dp, HealthyColors.Rule),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            containerColor = HealthyColors.Raised2,
+                            contentColor = HealthyColors.Paper,
+                        ),
+                    ) { Text("Drink", fontSize = 13.sp) }
+                    OutlinedButton(
+                        onClick = { onChoose(Product.KIND_FOOD) },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(10.dp),
+                        border = BorderStroke(1.dp, HealthyColors.Rule),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            containerColor = HealthyColors.Raised2,
+                            contentColor = HealthyColors.Paper,
+                        ),
+                    ) { Text("Food", fontSize = 13.sp) }
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    TextButton(onClick = onDismiss) { Text("Cancel", color = HealthyColors.Muted) }
+                }
+            }
+        }
+    }
 }
 
 @Composable

@@ -32,6 +32,19 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
         data class Logged(val product: Product, val fromCache: Boolean) : State
 
         /**
+         * A barcode the app has never seen. Spec 11.1: it asks which kind it
+         * is, because a drink and a food lead to completely different
+         * questions and guessing wrong wastes the user's time twice.
+         */
+        data class NeedsKind(val product: Product) : State
+
+        /**
+         * A food. The caller hands this to the food screen, which asks how
+         * much was eaten (spec 12.3) rather than how much caffeine it holds.
+         */
+        data class NeedsPortion(val product: Product) : State
+
+        /**
          * Found online but with no caffeine value; the user reads the can.
          *
          * [suggestion] is the closest drink in the built-in catalog by name,
@@ -52,31 +65,28 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
     private val _state = MutableStateFlow<State>(State.Idle)
     val state: StateFlow<State> = _state.asStateFlow()
 
-    fun onBarcode(barcode: String) {
+    /**
+     * [suggestedKind] is where the scan came from — the Today screen means a
+     * drink is likely, the food screen a food. It only pre-selects the choice
+     * for a barcode the app has never seen; a stored `kind` always wins.
+     */
+    fun onBarcode(barcode: String, suggestedKind: String = Product.KIND_DRINK) {
         viewModelScope.launch {
             _state.value = State.Working(barcode)
 
             val cached = products.byBarcode(barcode)
             if (cached != null) {
-                if (cached.mg != null) {
-                    logDrink(cached)
-                    _state.value = State.Logged(cached, fromCache = true)
-                } else {
-                    _state.value = State.NeedsCaffeine(cached, guessFor(cached))
-                }
+                // Spec 11.1: the stored kind decides which question is asked.
+                route(cached)
                 return@launch
             }
 
             // Only now, and only for this one host (spec 11.5).
-            when (val result = withContext(Dispatchers.IO) { OpenFoodFacts.lookup(barcode) }) {
+            when (val result = withContext(Dispatchers.IO) { OpenFoodFacts.lookup(barcode, suggestedKind) }) {
                 is OpenFoodFacts.Result.Found -> {
-                    products.upsert(result.product)
-                    if (result.product.mg != null) {
-                        logDrink(result.product)
-                        _state.value = State.Logged(result.product, fromCache = false)
-                    } else {
-                        _state.value = State.NeedsCaffeine(result.product, guessFor(result.product))
-                    }
+                    // Not stored yet: the user says what it is first, because
+                    // the kind decides everything that follows.
+                    _state.value = State.NeedsKind(result.product.copy(kind = suggestedKind))
                 }
 
                 OpenFoodFacts.Result.Unknown ->
@@ -87,6 +97,27 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
                 is OpenFoodFacts.Result.Failed ->
                     _state.value = State.Unknown(barcode, result.reason)
             }
+        }
+    }
+
+    /** Sends a known product to the question its kind calls for (spec 11.1). */
+    private suspend fun route(product: Product) {
+        _state.value = when {
+            product.kind == Product.KIND_FOOD -> State.NeedsPortion(product)
+            product.mg != null -> {
+                logDrink(product)
+                State.Logged(product, fromCache = true)
+            }
+            else -> State.NeedsCaffeine(product, guessFor(product))
+        }
+    }
+
+    /** The user has said which kind a new barcode is (spec 11.1). */
+    fun chooseKind(product: Product, kind: String) {
+        viewModelScope.launch {
+            val typed = product.copy(kind = kind)
+            products.upsert(typed)
+            route(typed)
         }
     }
 
