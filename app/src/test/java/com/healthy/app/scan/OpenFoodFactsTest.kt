@@ -28,22 +28,53 @@ class OpenFoodFactsTest {
     }
 
     /**
-     * caffeine_100g is grams per 100 ml, so 0.0032 is 32 mg per 100 ml, and a
-     * 250 ml can holds 80 mg (spec 11.3).
+     * The real value from the Open Food Facts record for Red Bull, checked
+     * against the tin: 0.032 grams per 100 ml is 32 mg per 100 ml, so a 250 ml
+     * can holds 80 mg.
+     *
+     * Spec 11.3 says multiply by 10, which would give 0.8 mg. Grams to
+     * milligrams is a factor of 1000. An earlier version here used 10000 and
+     * would have logged 800 mg for one can — the kind of error that only shows
+     * up against a real product, which is why this test uses the real number.
      */
     @Test
-    fun `caffeine converts from grams per 100ml to mg for the can`() {
+    fun `caffeine converts from grams per 100ml to mg for the whole can`() {
         val p = found(
-            """{"product":{"product_name":"Hell","quantity":"250 ml",
-               "nutriments":{"caffeine_100g":0.0032}}}"""
+            """{"product":{"product_name":"Red Bull","quantity":"250ml",
+               "nutriments":{"caffeine_100g":0.032}}}"""
         )
         assertEquals(80, p.mg)
     }
 
+    /** A serving figure is already the amount in the container. */
+    @Test
+    fun `caffeine_serving is preferred and needs no volume`() {
+        val p = found(
+            """{"product":{"product_name":"Red Bull","quantity":"250ml",
+               "nutriments":{"caffeine_100g":0.032,"caffeine_serving":0.08}}}"""
+        )
+        assertEquals(80, p.mg)
+    }
+
+    @Test
+    fun `a 330 ml cola with a caffeine value scales to the can`() {
+        // 0.0097 g/100ml is 9.7 mg/100ml, so 330 ml holds about 32 mg.
+        val p = found(
+            """{"product":{"product_name":"Cola","quantity":"330 ml",
+               "nutriments":{"caffeine_100g":0.0097}}}"""
+        )
+        assertEquals(32, p.mg)
+    }
+
     /** The field is absent far more often than not; the user is asked then. */
+    /**
+     * The common case. Checked against the live database: Coca-Cola and
+     * Coca-Cola Zero carry no caffeine figure at all, while Red Bull does. The
+     * user is asked once and never again for that barcode.
+     */
     @Test
     fun `a missing caffeine value stays absent rather than becoming zero`() {
-        val p = found("""{"product":{"product_name":"Water","quantity":"500 ml","nutriments":{}}}""")
+        val p = found("""{"product":{"product_name":"Cola","quantity":"330 ml","nutriments":{}}}""")
         assertNull(p.mg)
     }
 

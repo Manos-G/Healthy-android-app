@@ -77,11 +77,7 @@ object OpenFoodFacts {
                 brand = brand,
                 // caffeine_100g is in grams per 100 ml; x10 gives mg per 100 ml
                 // (spec 11.3). Often absent, and then the user is asked once.
-                mg = nutriments.doubleOrNull("caffeine_100g")?.let { grams ->
-                    val volume = parseQuantityMl(product.optString("quantity"))
-                    val mgPer100 = grams * 10_000
-                    if (volume != null) (mgPer100 * volume / 100.0).toInt() else mgPer100.toInt()
-                },
+                mg = caffeineMg(nutriments, parseQuantityMl(product.optString("quantity"))),
                 volumeMl = parseQuantityMl(product.optString("quantity")),
                 packGrams = product.doubleOrNull("product_quantity")?.toInt(),
                 servingGrams = parseQuantityMl(product.optString("serving_size")),
@@ -102,6 +98,31 @@ object OpenFoodFacts {
             )
         )
     }
+
+    /**
+     * Caffeine for the whole container, in milligrams.
+     *
+     * `caffeine_100g` is GRAMS per 100 ml, so the conversion to milligrams is
+     * x1000, not x10 as spec 11.3 states. Verified against the real record:
+     * Red Bull reports 0.032, which is 32 mg per 100 ml and 80 mg in a 250 ml
+     * can — the number on the side of the tin. The spec's factor would give
+     * 0.8 mg and the earlier code here gave 800; both are visibly wrong
+     * against a can anyone can pick up.
+     *
+     * `caffeine_serving` is preferred when present, because it is already the
+     * amount in one serving and needs no volume at all.
+     */
+    fun caffeineMg(nutriments: JSONObject, volumeMl: Int?): Int? {
+        nutriments.doubleOrNull("caffeine_serving")?.let { grams ->
+            return (grams * MG_PER_GRAM).toInt().takeIf { it > 0 }
+        }
+        val per100g = nutriments.doubleOrNull("caffeine_100g") ?: return null
+        val mgPer100ml = per100g * MG_PER_GRAM
+        val total = if (volumeMl != null) mgPer100ml * volumeMl / 100.0 else mgPer100ml
+        return total.toInt().takeIf { it > 0 }
+    }
+
+    private const val MG_PER_GRAM = 1000.0
 
     /**
      * Pulls the number out of "250 ml", "1,5 L", "30 g" and similar. The field

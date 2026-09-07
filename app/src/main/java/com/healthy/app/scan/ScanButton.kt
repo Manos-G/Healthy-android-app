@@ -87,7 +87,8 @@ fun ScanButton(
         )
 
         is ScanViewModel.State.NeedsCaffeine -> CaffeineDialog(
-            productName = s.product.name,
+            productName = listOfNotNull(s.product.brand, s.product.name)
+                .joinToString(" ").trim().ifBlank { s.product.name },
             initialVolume = s.product.volumeMl,
             onSave = { mg, ml, name -> vm.saveCaffeine(s.product, mg, ml, name) },
             onDismiss = vm::dismiss,
@@ -167,7 +168,10 @@ private fun CaffeineDialog(
                     fontWeight = FontWeight.SemiBold,
                 )
                 Text(
-                    heading ?: "Open Food Facts has no caffeine value for this. Read it off the can; you will not be asked again.",
+                    heading
+                        ?: "Found in Open Food Facts, but the entry carries no caffeine " +
+                        "figure — most colas do not, while most energy drinks do. " +
+                        "Read the number off the can. This barcode will not ask again.",
                     color = HealthyColors.Muted,
                     fontSize = 12.sp,
                     modifier = Modifier.padding(top = 6.dp),
