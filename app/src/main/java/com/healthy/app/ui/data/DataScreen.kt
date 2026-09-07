@@ -38,15 +38,24 @@ fun DataScreen(
     var showNotes by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
     if (showSources) {
-        com.healthy.app.ui.sources.SourcesScreen(onClose = { showSources = false })
+        com.healthy.app.ui.sources.SourcesScreen(
+            onClose = { showSources = false },
+            modifier = modifier,
+        )
         return
     }
     if (showNotes) {
-        com.healthy.app.ui.notes.NotesScreen(onClose = { showNotes = false })
+        com.healthy.app.ui.notes.NotesScreen(
+            onClose = { showNotes = false },
+            modifier = modifier,
+        )
         return
     }
     if (showSettings) {
-        com.healthy.app.ui.settings.SettingsScreen(onClose = { showSettings = false })
+        com.healthy.app.ui.settings.SettingsScreen(
+            onClose = { showSettings = false },
+            modifier = modifier,
+        )
         return
     }
     val status by vm.status.collectAsStateWithLifecycle()

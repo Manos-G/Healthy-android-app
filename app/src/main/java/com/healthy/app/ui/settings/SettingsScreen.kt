@@ -50,7 +50,7 @@ fun SettingsScreen(
     val settings by vm.settings.collectAsStateWithLifecycle()
 
     LazyColumn(
-        modifier = modifier.fillMaxSize().padding(horizontal = 16.dp),
+        modifier = modifier.padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
         contentPadding = PaddingValues(vertical = 14.dp),
     ) {
