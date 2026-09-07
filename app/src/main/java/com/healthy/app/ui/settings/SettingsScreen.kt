@@ -170,23 +170,24 @@ fun SettingsScreen(
                         fontSize = 11.sp,
                         modifier = Modifier.padding(top = 10.dp),
                     )
-                    androidx.compose.material3.TextButton(
-                        onClick = {
-                            runCatching {
-                                context.startActivity(
-                                    android.content.Intent(
-                                        android.provider.Settings
-                                            .ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS
+                    Row {
+                        androidx.compose.material3.TextButton(onClick = { vm.checkNow() }) {
+                            Text("Check now", color = HealthyColors.Sleep, fontSize = 13.sp)
+                        }
+                        androidx.compose.material3.TextButton(
+                            onClick = {
+                                runCatching {
+                                    context.startActivity(
+                                        android.content.Intent(
+                                            android.provider.Settings
+                                                .ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS
+                                        )
                                     )
-                                )
-                            }
-                        },
-                    ) {
-                        Text(
-                            "Battery settings",
-                            color = HealthyColors.Sleep,
-                            fontSize = 13.sp,
-                        )
+                                }
+                            },
+                        ) {
+                            Text("Battery settings", color = HealthyColors.Muted, fontSize = 13.sp)
+                        }
                     }
                     Text(
                         "A Pixel runs the job reliably without changing anything. " +

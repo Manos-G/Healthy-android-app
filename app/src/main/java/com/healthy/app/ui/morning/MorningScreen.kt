@@ -45,12 +45,12 @@ import com.healthy.app.ui.theme.HealthyColors
 
 @Composable
 fun MorningScreen(
-    openDate: String? = null,
+    openNight: com.healthy.app.NightRequest? = null,
     modifier: Modifier = Modifier,
     vm: MorningViewModel = viewModel(),
 ) {
-    androidx.compose.runtime.LaunchedEffect(openDate) {
-        if (openDate != null) vm.selectDate(openDate)
+    androidx.compose.runtime.LaunchedEffect(openNight) {
+        if (openNight != null) vm.selectDate(openNight.date)
     }
     val form by vm.form.collectAsStateWithLifecycle()
     val saved by vm.savedDates.collectAsStateWithLifecycle()

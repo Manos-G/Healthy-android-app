@@ -94,6 +94,9 @@ dependencies {
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.health.connect)
     implementation(libs.androidx.work.runtime)
+    // ZXing Android Embedded, Apache 2.0. Never ML Kit: it is proprietary and
+    // would stop an F-Droid release (spec 11.1).
+    implementation(libs.zxing.embedded)
 
     implementation(libs.kotlinx.coroutines.android)
 

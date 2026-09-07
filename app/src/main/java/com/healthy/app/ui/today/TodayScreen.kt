@@ -86,6 +86,9 @@ fun TodayScreen(
         item { CatalogCard(state.catalog, vm::log) }
         item { EntriesCard(state.entries, vm::delete) }
         item {
+            com.healthy.app.scan.ScanButton(modifier = Modifier.fillMaxWidth())
+        }
+        item {
             com.healthy.app.ui.notes.QuickNoteButton(
                 modifier = Modifier.fillMaxWidth(),
             )

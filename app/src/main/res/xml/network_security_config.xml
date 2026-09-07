@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Spec 11.5: the app reaches world.openfoodfacts.org and no other address.
+
+  cleartextTrafficPermitted is false everywhere, and the one domain listed is
+  the only one with a trust anchor of its own. This is a statement the user can
+  verify, not a promise in a readme.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="false">world.openfoodfacts.org</domain>
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </domain-config>
+</network-security-config>

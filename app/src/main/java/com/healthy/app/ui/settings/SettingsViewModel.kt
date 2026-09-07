@@ -36,6 +36,8 @@ class SettingsViewModel(app: Application) : AndroidViewModel(app) {
      * Turning the reminder on schedules the 30-minute job; turning it off
      * cancels it, so a disabled reminder costs no battery at all.
      */
+    fun checkNow() = MorningWorker.runOnce(getApplication())
+
     fun setNotifyEnabled(value: Boolean) = viewModelScope.launch {
         store.setNotifyEnabled(value)
         val app = getApplication<Application>()

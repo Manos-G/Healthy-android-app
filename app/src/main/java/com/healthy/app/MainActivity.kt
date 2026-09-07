@@ -11,15 +11,24 @@ import com.healthy.app.ui.theme.HealthyTheme
 
 class MainActivity : ComponentActivity() {
 
-    private val nightDate = mutableStateOf<String?>(null)
+    /**
+     * The night a notification asked for, paired with a counter.
+     *
+     * The counter is what makes a second tap on the same night work: keyed on
+     * the date alone, the effect that switches tabs never re-runs when the
+     * same date arrives twice, so a user who navigated away and tapped the
+     * notification again would stay where they were.
+     */
+    private val nightRequest = mutableStateOf<NightRequest?>(null)
+    private var requestCount = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
-        nightDate.value = dateFrom(intent)
+        nightRequest.value = requestFrom(intent)
         setContent {
             HealthyTheme {
-                HealthyApp(openNightDate = nightDate.value)
+                HealthyApp(openNight = nightRequest.value)
             }
         }
     }
@@ -31,10 +40,14 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        nightDate.value = dateFrom(intent)
+        nightRequest.value = requestFrom(intent)
     }
 
-    private fun dateFrom(intent: android.content.Intent?): String? =
+    private fun requestFrom(intent: android.content.Intent?): NightRequest? =
         intent?.getStringExtra(MorningNotifier.EXTRA_DATE)
             ?.takeIf { runCatching { java.time.LocalDate.parse(it) }.isSuccess }
+            ?.let { NightRequest(it, ++requestCount) }
 }
+
+/** A request to open one night, distinct on every delivery. */
+data class NightRequest(val date: String, val token: Int)

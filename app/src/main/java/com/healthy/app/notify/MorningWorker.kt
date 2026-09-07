@@ -35,26 +35,44 @@ class MorningWorker(
         // how the user finds out the system stopped the job (spec 14.4).
         settings.setLastJobRun(System.currentTimeMillis())
 
-        if (!HealthConnect.hasAllReadPermissions(context)) return Result.success()
+        if (!HealthConnect.hasAllReadPermissions(context)) {
+            android.util.Log.i(TAG, "no read permissions; nothing to do")
+            return Result.success()
+        }
 
-        val night = HealthReader(context).mostRecentSession() ?: return Result.success()
+        val night = HealthReader(context).mostRecentSession()
+        if (night == null) {
+            android.util.Log.i(TAG, "no sleep session in the last 3 days")
+            return Result.success()
+        }
         val stored = settings.settings.first()
+        android.util.Log.i(
+            TAG,
+            "session ${night.date} ends ${night.endMillis}, " +
+                "lastNotified ${stored.lastNotifiedSleepEnd}",
+        )
 
         // Already told them about this one.
-        if (stored.lastNotifiedSleepEnd == night.endMillis) return Result.success()
+        if (stored.lastNotifiedSleepEnd == night.endMillis) {
+            android.util.Log.i(TAG, "already notified for this session")
+            return Result.success()
+        }
 
         // Already logged, so there is nothing to ask for.
         if (HealthyDatabase.get(context).nightDao().exists(night.date)) {
+            android.util.Log.i(TAG, "night ${night.date} already saved")
             settings.setLastNotifiedSleepEnd(night.endMillis)
             return Result.success()
         }
 
+        android.util.Log.i(TAG, "notifying for ${night.date}")
         MorningNotifier.notifyNight(context, night.date, night.minutes)
         settings.setLastNotifiedSleepEnd(night.endMillis)
         return Result.success()
     }
 
     companion object {
+        private const val TAG = "HealthyWorker"
         private const val NAME = "morning-notification"
 
         fun enable(context: Context) {
@@ -65,6 +83,22 @@ class MorningWorker(
                 // push the next run half an hour away each time.
                 ExistingPeriodicWorkPolicy.KEEP,
                 request,
+            )
+        }
+
+        /**
+         * Runs the same check immediately, through the same worker.
+         *
+         * The periodic job cannot be triggered on demand, so without this
+         * there is no way to find out whether the reminder works except to
+         * sleep and see. It also gives the user a way to prove the thing is
+         * alive rather than trusting a timestamp.
+         */
+        fun runOnce(context: Context) {
+            WorkManager.getInstance(context).enqueueUniqueWork(
+                "$NAME-once",
+                androidx.work.ExistingWorkPolicy.REPLACE,
+                androidx.work.OneTimeWorkRequestBuilder<MorningWorker>().build(),
             )
         }
 
