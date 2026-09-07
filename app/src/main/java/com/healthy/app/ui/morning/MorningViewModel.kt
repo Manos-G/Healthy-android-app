@@ -245,7 +245,12 @@ class MorningViewModel(app: Application) : AndroidViewModel(app) {
                         spo2 = if (SyncedField.SPO2 in edited) f.spo2
                         else result.data.spo2?.let { "%.1f".format(it) }.orEmpty(),
                         syncedAt = System.currentTimeMillis(),
-                        stageSummary = describeStages(t, result.data.heartRateSampleCount),
+                        stageSummary = describeStages(
+                            t,
+                            result.data.heartRateSampleCount,
+                            result.data.source,
+                            result.data.competingSessions,
+                        ),
                         syncMessage = buildString {
                             append("Read ")
                             append(result.data.minutes / 60)
@@ -264,14 +269,27 @@ class MorningViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    private fun describeStages(t: SleepAnalysis.StageTotals, hrSamples: Int): String {
+    private fun describeStages(
+        t: SleepAnalysis.StageTotals,
+        hrSamples: Int,
+        source: String,
+        competing: Int,
+    ): String = buildString {
         if (t.deepMin == null) {
-            return "The watch reported no sleep stages for this night. " +
-                "Heart rate samples: $hrSamples."
+            append("The watch reported no sleep stages for this night.")
+        } else {
+            append("Deep ${t.deepMin} m, light ${t.lightMin} m, REM ${t.remMin} m, ")
+            append("awake ${t.awakeMin} m. ")
+            append("Wake-ups: ${t.wakeups?.toString() ?: "not reported"}.")
         }
-        val wake = t.wakeups?.toString() ?: "not reported"
-        return "Deep ${t.deepMin} m, light ${t.lightMin} m, REM ${t.remMin} m, " +
-            "awake ${t.awakeMin} m. Wake-ups: $wake. Heart rate samples: $hrSamples."
+        append(" Heart rate samples: $hrSamples.")
+        append("\nFrom ${source.substringAfterLast('.')}")
+        if (competing > 0) {
+            append(", and $competing other session")
+            if (competing > 1) append("s")
+            append(" for this night was ignored; the longest wins")
+        }
+        append(".")
     }
 
     private fun stageSummary(night: com.healthy.app.data.entity.Night): String? =

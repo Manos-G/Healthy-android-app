@@ -29,6 +29,17 @@ class HealthReader(private val context: Context) {
         val spo2: Double?,
         /** Individual bpm samples, kept for the hypnogram in step 15. */
         val heartRateSampleCount: Int,
+        /**
+         * The app that wrote the session, and how many other apps wrote one
+         * for the same night.
+         *
+         * With more than one writer installed (Mi Fitness and Gadgetbridge,
+         * say) two sessions can describe the same night with different stages.
+         * The reader keeps the longest, but the user should be able to see
+         * which source that was rather than guess.
+         */
+        val source: String,
+        val competingSessions: Int,
     )
 
     sealed interface Result {
@@ -63,9 +74,12 @@ class HealthReader(private val context: Context) {
                 )
             ).records
 
-            val session = sessions
+            val forThisNight = sessions
                 .filter { HealthyDay.dayOf(it.startTime.toEpochMilli(), zone) == date }
-                // The longest, in case a nap and the main sleep share a day.
+
+            val session = forThisNight
+                // The longest, in case a nap and the main sleep share a day,
+                // or two apps both wrote the night.
                 .maxByOrNull { it.endTime.toEpochMilli() - it.startTime.toEpochMilli() }
                 ?: return@runCatching Result.NoSession
 
@@ -110,6 +124,8 @@ class HealthReader(private val context: Context) {
                     restingHr = SleepAnalysis.restingHeartRate(groupMinima),
                     spo2 = SleepAnalysis.meanSpo2(oxygen),
                     heartRateSampleCount = heartRecords.sumOf { it.samples.size },
+                    source = session.metadata.dataOrigin.packageName,
+                    competingSessions = forThisNight.size - 1,
                 )
             )
         }.getOrElse { Result.Failed(it.message ?: it::class.simpleName ?: "unknown error") }
@@ -127,6 +143,9 @@ class HealthReader(private val context: Context) {
         val mostRecentHeartRate: Long?,
         val heartRateSamples: Int,
         val spo2Samples: Int,
+        /** Which apps are writing, now that more than one can be. */
+        val sleepSources: Set<String>,
+        val heartRateSources: Set<String>,
     )
 
     suspend fun survey(days: Long = 7): Survey? {
@@ -157,6 +176,8 @@ class HealthReader(private val context: Context) {
                     .maxOfOrNull { it.time.toEpochMilli() },
                 heartRateSamples = heart.sumOf { it.samples.size },
                 spo2Samples = oxygen.size,
+                sleepSources = sessions.map { it.metadata.dataOrigin.packageName }.toSet(),
+                heartRateSources = heart.map { it.metadata.dataOrigin.packageName }.toSet(),
             )
         }.getOrNull()
     }

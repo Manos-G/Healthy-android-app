@@ -146,10 +146,17 @@ class DataViewModel(app: Application) : AndroidViewModel(app) {
                         } ?: "none in this window"
                     )
                     append("\nBlood oxygen records: ${result.spo2Samples}")
+                    append("\nSleep written by: ")
+                    append(sourcesOf(result.sleepSources))
+                    append("\nHeart rate written by: ")
+                    append(sourcesOf(result.heartRateSources))
                 }
             }
         }
     }
+
+    private fun sourcesOf(packages: Set<String>): String =
+        if (packages.isEmpty()) "nothing" else packages.joinToString(", ") { it.substringAfterLast('.') }
 
     fun clearStatus() {
         _status.value = null
