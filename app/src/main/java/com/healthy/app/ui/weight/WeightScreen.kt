@@ -111,6 +111,7 @@ fun WeightScreen(
         if (state.bodyFatPoints.size >= 2) {
             item { BodyFatCard(state) }
         }
+        item { GoalCard(state, vm) }
         item { ImportCard(vm) }
     }
 }
@@ -168,6 +169,194 @@ private fun BodyFatCard(state: WeightState) {
         )
     }
 }
+
+/**
+ * Goal modes (spec 8.5). The default is no goal, and the spec forbids asking
+ * for a goal weight anywhere in plain entry — this is the only place it is
+ * offered, and only because the user chose to come here.
+ */
+@Composable
+private fun GoalCard(state: WeightState, vm: WeightViewModel) {
+    SectionCard {
+        Text("Goal", color = HealthyColors.Paper, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            listOf(
+                com.healthy.app.data.HealthySettings.GOAL_NONE to "No goal",
+                com.healthy.app.data.HealthySettings.GOAL_HOLD to "Hold",
+                com.healthy.app.data.HealthySettings.GOAL_CHANGE to "Change",
+            ).forEach { (mode, label) ->
+                val selected = state.goalMode == mode
+                androidx.compose.material3.OutlinedButton(
+                    onClick = {
+                        if (mode == com.healthy.app.data.HealthySettings.GOAL_NONE) vm.setNoGoal()
+                    },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(10.dp),
+                    border = androidx.compose.foundation.BorderStroke(
+                        1.dp,
+                        if (selected) HealthyColors.Sleep else HealthyColors.Rule,
+                    ),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        containerColor = if (selected) HealthyColors.Sleep.copy(alpha = 0.18f) else HealthyColors.Raised2,
+                        contentColor = if (selected) HealthyColors.Sleep else HealthyColors.Paper,
+                    ),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 8.dp),
+                ) {
+                    Text(label, fontSize = 12.sp)
+                }
+            }
+        }
+
+        when (state.goalMode) {
+            com.healthy.app.data.HealthySettings.GOAL_NONE -> {
+                Text(
+                    "The app records your weight and shows the trend. It sets no target and asks for no goal weight.",
+                    color = HealthyColors.Muted,
+                    fontSize = 12.sp,
+                    modifier = Modifier.padding(top = 10.dp),
+                )
+                GoalSetters(state, vm)
+            }
+
+            com.healthy.app.data.HealthySettings.GOAL_HOLD -> {
+                Text(
+                    "Holding ${"%.1f".format(state.holdTargetKg ?: 0.0)} kg, " +
+                        "with a band of plus or minus ${WeightGoalConstants.BAND} kg.",
+                    color = HealthyColors.Paper,
+                    fontSize = 13.sp,
+                    modifier = Modifier.padding(top = 10.dp),
+                )
+                val status = state.holdStatus
+                Text(
+                    status?.message
+                        ?: if (status?.insideBand == true) {
+                            "Your trend is inside the band."
+                        } else {
+                            "Your trend is outside the band, but not yet for a week."
+                        },
+                    color = if (status?.message != null) HealthyColors.Caffeine else HealthyColors.Muted,
+                    fontSize = 12.sp,
+                    modifier = Modifier.padding(top = 6.dp),
+                )
+                Text(
+                    "Compared against the trend, never the daily reading. A daily weight leaves any band constantly.",
+                    color = HealthyColors.Muted,
+                    fontSize = 11.sp,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+                GoalSetters(state, vm)
+            }
+
+            else -> {
+                val progress = state.progress
+                Text(
+                    "Target ${"%+.2f".format(state.rateKgPerWeek ?: 0.0)} kg a week.",
+                    color = HealthyColors.Paper,
+                    fontSize = 13.sp,
+                    modifier = Modifier.padding(top = 10.dp),
+                )
+                Text(
+                    progress?.actualRateKgPerWeek
+                        ?.let { "Actual ${"%+.2f".format(it)} kg a week across the last 14 days." }
+                        ?: "Not enough readings yet to say what you are actually doing.",
+                    color = HealthyColors.Sleep,
+                    fontSize = 13.sp,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+                Text(
+                    "These two numbers tell you whether the plan works. No other number is necessary.",
+                    color = HealthyColors.Muted,
+                    fontSize = 11.sp,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+                GoalSetters(state, vm)
+            }
+        }
+
+        if (state.rateRefusal != null) {
+            Text(
+                state.rateRefusal.orEmpty(),
+                color = HealthyColors.Warn,
+                fontSize = 12.sp,
+                modifier = Modifier.padding(top = 10.dp),
+            )
+        }
+    }
+}
+
+private object WeightGoalConstants {
+    val BAND = com.healthy.app.analysis.WeightGoal.HOLD_BAND_KG.toInt()
+}
+
+@Composable
+private fun GoalSetters(state: WeightState, vm: WeightViewModel) {
+    var holdText by remember { mutableStateOf(state.holdTargetKg?.let { "%.1f".format(it) } ?: "") }
+    var rateText by remember { mutableStateOf(state.rateKgPerWeek?.let { "%.2f".format(it) } ?: "") }
+
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        androidx.compose.material3.OutlinedTextField(
+            value = holdText,
+            onValueChange = { holdText = it.filter { c -> c.isDigit() || c == '.' } },
+            label = { Text("Hold at kg", fontSize = 11.sp) },
+            singleLine = true,
+            modifier = Modifier.weight(1f),
+            colors = goalFieldColors(),
+        )
+        androidx.compose.material3.TextButton(
+            onClick = { holdText.toDoubleOrNull()?.let(vm::setHoldGoal) },
+            enabled = holdText.toDoubleOrNull() != null,
+        ) {
+            Text("Set", color = HealthyColors.Sleep, fontSize = 13.sp)
+        }
+    }
+
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        androidx.compose.material3.OutlinedTextField(
+            value = rateText,
+            onValueChange = { rateText = it.filter { c -> c.isDigit() || c == '.' || c == '-' } },
+            label = { Text("Change kg a week", fontSize = 11.sp) },
+            singleLine = true,
+            modifier = Modifier.weight(1f),
+            colors = goalFieldColors(),
+        )
+        androidx.compose.material3.TextButton(
+            onClick = { rateText.toDoubleOrNull()?.let(vm::setChangeGoal) },
+            enabled = rateText.toDoubleOrNull() != null,
+        ) {
+            Text("Set", color = HealthyColors.Sleep, fontSize = 13.sp)
+        }
+    }
+
+    Text(
+        state.maxRateKgPerWeek
+            ?.let { "A rate is set, never a date. The most this app will set is ${"%.2f".format(it)} kg a week, which is 1 percent of your weight." }
+            ?: "A rate is set, never a date. A missed date makes an app demand a larger deficit every week.",
+        color = HealthyColors.Muted,
+        fontSize = 11.sp,
+        modifier = Modifier.padding(top = 8.dp),
+    )
+}
+
+@Composable
+private fun goalFieldColors() = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
+    focusedTextColor = HealthyColors.Paper,
+    unfocusedTextColor = HealthyColors.Paper,
+    focusedBorderColor = HealthyColors.Sleep,
+    unfocusedBorderColor = HealthyColors.Rule,
+    focusedLabelColor = HealthyColors.Sleep,
+    unfocusedLabelColor = HealthyColors.Muted,
+    cursorColor = HealthyColors.Sleep,
+)
 
 @Composable
 private fun ImportCard(vm: WeightViewModel) {

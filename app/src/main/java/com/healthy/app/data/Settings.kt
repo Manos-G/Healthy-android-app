@@ -28,12 +28,20 @@ data class HealthySettings(
     /** A unit means different things by country, so both are settings (spec 9.4). */
     val unitsPerBeer: Double = DEFAULT_UNITS_PER_BEER,
     val unitsPerWine: Double = DEFAULT_UNITS_PER_WINE,
+    /** none, hold or change (spec 8.5). The default is no goal. */
+    val goalMode: String = GOAL_NONE,
+    val goalHoldKg: Double? = null,
+    val goalRateKgPerWeek: Double? = null,
+    val goalStartedOn: String? = null,
 ) {
     companion object {
         const val DEFAULT_BEDTIME = "23:30"
         const val DEFAULT_FLUID_TARGET_ML = 2000
         const val DEFAULT_UNITS_PER_BEER = 1.7
         const val DEFAULT_UNITS_PER_WINE = 1.6
+        const val GOAL_NONE = "none"
+        const val GOAL_HOLD = "hold"
+        const val GOAL_CHANGE = "change"
     }
 }
 
@@ -49,6 +57,10 @@ class SettingsStore(private val context: Context) {
             fluidTargetMl = prefs[KEY_FLUID_TARGET] ?: HealthySettings.DEFAULT_FLUID_TARGET_ML,
             unitsPerBeer = prefs[KEY_UNITS_BEER] ?: HealthySettings.DEFAULT_UNITS_PER_BEER,
             unitsPerWine = prefs[KEY_UNITS_WINE] ?: HealthySettings.DEFAULT_UNITS_PER_WINE,
+            goalMode = prefs[KEY_GOAL_MODE] ?: HealthySettings.GOAL_NONE,
+            goalHoldKg = prefs[KEY_GOAL_HOLD],
+            goalRateKgPerWeek = prefs[KEY_GOAL_RATE],
+            goalStartedOn = prefs[KEY_GOAL_STARTED],
         )
     }
 
@@ -59,6 +71,28 @@ class SettingsStore(private val context: Context) {
     suspend fun setBedtimeLimitMg(value: Int) = edit { it[KEY_LIMIT] = value }
 
     suspend fun setFluidTargetMl(value: Int) = edit { it[KEY_FLUID_TARGET] = value }
+
+    /** Clearing the goal removes its values rather than leaving them stale. */
+    suspend fun setNoGoal() = edit {
+        it[KEY_GOAL_MODE] = HealthySettings.GOAL_NONE
+        it.remove(KEY_GOAL_HOLD)
+        it.remove(KEY_GOAL_RATE)
+        it.remove(KEY_GOAL_STARTED)
+    }
+
+    suspend fun setHoldGoal(targetKg: Double, startedOn: String) = edit {
+        it[KEY_GOAL_MODE] = HealthySettings.GOAL_HOLD
+        it[KEY_GOAL_HOLD] = targetKg
+        it[KEY_GOAL_STARTED] = startedOn
+        it.remove(KEY_GOAL_RATE)
+    }
+
+    suspend fun setChangeGoal(rateKgPerWeek: Double, startedOn: String) = edit {
+        it[KEY_GOAL_MODE] = HealthySettings.GOAL_CHANGE
+        it[KEY_GOAL_RATE] = rateKgPerWeek
+        it[KEY_GOAL_STARTED] = startedOn
+        it.remove(KEY_GOAL_HOLD)
+    }
 
     private suspend fun edit(block: (androidx.datastore.preferences.core.MutablePreferences) -> Unit) {
         context.dataStore.edit(block)
@@ -71,5 +105,9 @@ class SettingsStore(private val context: Context) {
         val KEY_FLUID_TARGET: Preferences.Key<Int> = intPreferencesKey("fluid_target_ml")
         val KEY_UNITS_BEER: Preferences.Key<Double> = doublePreferencesKey("units_per_beer")
         val KEY_UNITS_WINE: Preferences.Key<Double> = doublePreferencesKey("units_per_wine")
+        val KEY_GOAL_MODE: Preferences.Key<String> = stringPreferencesKey("goal_mode")
+        val KEY_GOAL_HOLD: Preferences.Key<Double> = doublePreferencesKey("goal_hold_kg")
+        val KEY_GOAL_RATE: Preferences.Key<Double> = doublePreferencesKey("goal_rate_kg_week")
+        val KEY_GOAL_STARTED: Preferences.Key<String> = stringPreferencesKey("goal_started_on")
     }
 }
