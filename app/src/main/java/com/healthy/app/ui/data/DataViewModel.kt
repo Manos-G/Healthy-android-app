@@ -8,6 +8,7 @@ import com.healthy.app.data.HealthyDatabase
 import com.healthy.app.data.SettingsStore
 import com.healthy.app.data.export.Csv
 import com.healthy.app.data.export.JsonBackup
+import com.healthy.app.health.HealthReader
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -109,6 +110,45 @@ class DataViewModel(app: Application) : AndroidViewModel(app) {
             exportedAt = System.currentTimeMillis(),
             dbVersion = HealthyDatabase.VERSION,
         )
+    }
+
+    private val _survey = MutableStateFlow<String?>(null)
+    val survey: StateFlow<String?> = _survey.asStateFlow()
+
+    /**
+     * Reads a week of Health Connect and reports what is actually there.
+     *
+     * START-HERE asks questions the code cannot answer by reasoning: whether
+     * the watch writes awake blocks at all, and how recent the heart rate is.
+     * This answers them from the device.
+     */
+    fun runSurvey() {
+        viewModelScope.launch {
+            _survey.value = "Reading…"
+            val result = HealthReader(getApplication()).survey(days = 7)
+            _survey.value = when (result) {
+                null -> "Health Connect is unavailable or permission is not granted."
+                else -> buildString {
+                    append("Last 7 days\n")
+                    append("Sleep sessions: ${result.sessions}")
+                    append(", with stages: ${result.sessionsWithStages}\n")
+                    append("Stage types seen: ")
+                    append(if (result.stageTypesSeen.isEmpty()) "none" else result.stageTypesSeen.sorted().joinToString(", "))
+                    append("\nAwake blocks: ${result.awakeBlockCount}")
+                    if (result.awakeBlockCount == 0) append("  (so wake-ups read \"not reported\")")
+                    append("\nHeart rate samples: ${result.heartRateSamples}\n")
+                    append("Most recent heart rate: ")
+                    append(
+                        result.mostRecentHeartRate?.let {
+                            java.time.Instant.ofEpochMilli(it)
+                                .atZone(java.time.ZoneId.systemDefault())
+                                .format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))
+                        } ?: "none in this window"
+                    )
+                    append("\nBlood oxygen records: ${result.spo2Samples}")
+                }
+            }
+        }
     }
 
     fun clearStatus() {

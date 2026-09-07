@@ -7,6 +7,8 @@ import com.healthy.app.core.HealthyDay
 import com.healthy.app.data.HealthyDatabase
 import com.healthy.app.data.entity.Night
 import com.healthy.app.health.HealthConnect
+import com.healthy.app.health.HealthReader
+import com.healthy.app.health.SleepAnalysis
 import com.healthy.app.ui.health.HealthConnectUiState
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -52,6 +54,14 @@ data class MorningForm(
     val caffeineCount: Int = 0,
     val existing: Boolean = false,
     val savedAt: Long? = null,
+    /**
+     * Sync-owned fields the user has typed over. A second sync must not
+     * overwrite these (spec 3.4, acceptance test 7).
+     */
+    val editedFields: Set<String> = emptySet(),
+    val syncedAt: Long? = null,
+    val syncMessage: String? = null,
+    val stageSummary: String? = null,
 ) {
     /**
      * Sleep duration in minutes, handling a night that crosses midnight and one
@@ -75,6 +85,15 @@ data class MorningForm(
         get() = minutes != null || alertness != null
 }
 
+/** The sync-owned field names, matching the `night` columns. */
+object SyncedField {
+    const val SLEEP_START = "sleepStart"
+    const val SLEEP_END = "sleepEnd"
+    const val WAKEUPS = "wakeups"
+    const val RESTING_HR = "restingHr"
+    const val SPO2 = "spo2"
+}
+
 private val HHMM: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 
 internal fun String.toLocalTimeOrNull(): LocalTime? =
@@ -86,6 +105,10 @@ class MorningViewModel(app: Application) : AndroidViewModel(app) {
     private val db = HealthyDatabase.get(app)
     private val nights = db.nightDao()
     private val drinks = db.drinkDao()
+    private val reader = HealthReader(app)
+
+    /** Held between a sync and the save that writes them (spec 4.2). */
+    private var pendingStageBlocks: List<com.healthy.app.data.entity.StageBlock> = emptyList()
 
     private val _health = MutableStateFlow(
         HealthConnectUiState(HealthConnect.availability(app), isGranted = false)
@@ -137,6 +160,8 @@ class MorningViewModel(app: Application) : AndroidViewModel(app) {
                 exercise = night.exercise,
                 roomTempC = night.roomTempC?.let { trimNumber(it) }.orEmpty(),
                 notes = night.notes,
+                editedFields = night.editedFields,
+                stageSummary = stageSummary(night),
                 caffeineMg = dayDrinks.sumOf { it.mg },
                 caffeineCount = dayDrinks.size,
                 existing = true,
@@ -167,6 +192,94 @@ class MorningViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
+     * Updates a sync-owned field and records that the user typed it.
+     *
+     * This is what makes acceptance test 7 hold: a manual edit survives a
+     * second sync, because [sync] skips every field named here (spec 3.4).
+     */
+    fun edit(field: String, block: (MorningForm) -> MorningForm) {
+        val current = _form.value
+        _form.value = block(current).copy(editedFields = current.editedFields + field)
+    }
+
+    /** Lets the user hand a field back to the sync. */
+    fun clearEdit(field: String) {
+        val current = _form.value
+        _form.value = current.copy(editedFields = current.editedFields - field)
+    }
+
+    /**
+     * Reads the selected night from Health Connect and fills the form
+     * (spec 3.4). Fields the user has edited are left alone.
+     */
+    fun sync() {
+        val date = _form.value.date
+        viewModelScope.launch {
+            _form.value = _form.value.copy(syncMessage = "Reading Health Connect…")
+            when (val result = reader.readNight(date)) {
+                is HealthReader.Result.NoSession ->
+                    _form.value = _form.value.copy(
+                        syncMessage = "No sleep session recorded for $date.",
+                    )
+
+                is HealthReader.Result.Failed ->
+                    _form.value = _form.value.copy(
+                        syncMessage = "Could not read Health Connect: ${result.reason}",
+                    )
+
+                is HealthReader.Result.Found -> {
+                    pendingStageBlocks = result.data.stageBlocks
+                    val f = _form.value
+                    val edited = f.editedFields
+                    val t = result.data.totals
+
+                    _form.value = f.copy(
+                        sleepStart = if (SyncedField.SLEEP_START in edited) f.sleepStart
+                        else result.data.sleepStart.asClockString(),
+                        sleepEnd = if (SyncedField.SLEEP_END in edited) f.sleepEnd
+                        else result.data.sleepEnd.asClockString(),
+                        wakeups = if (SyncedField.WAKEUPS in edited) f.wakeups
+                        else t.wakeups?.toString().orEmpty(),
+                        restingHr = if (SyncedField.RESTING_HR in edited) f.restingHr
+                        else result.data.restingHr?.toString().orEmpty(),
+                        spo2 = if (SyncedField.SPO2 in edited) f.spo2
+                        else result.data.spo2?.let { "%.1f".format(it) }.orEmpty(),
+                        syncedAt = System.currentTimeMillis(),
+                        stageSummary = describeStages(t, result.data.heartRateSampleCount),
+                        syncMessage = buildString {
+                            append("Read ")
+                            append(result.data.minutes / 60)
+                            append(" h ")
+                            append(result.data.minutes % 60)
+                            append(" m")
+                            if (edited.isNotEmpty()) {
+                                append(". Kept your edits to ")
+                                append(edited.sorted().joinToString(", "))
+                            }
+                            append(".")
+                        },
+                    )
+                }
+            }
+        }
+    }
+
+    private fun describeStages(t: SleepAnalysis.StageTotals, hrSamples: Int): String {
+        if (t.deepMin == null) {
+            return "The watch reported no sleep stages for this night. " +
+                "Heart rate samples: $hrSamples."
+        }
+        val wake = t.wakeups?.toString() ?: "not reported"
+        return "Deep ${t.deepMin} m, light ${t.lightMin} m, REM ${t.remMin} m, " +
+            "awake ${t.awakeMin} m. Wake-ups: $wake. Heart rate samples: $hrSamples."
+    }
+
+    private fun stageSummary(night: com.healthy.app.data.entity.Night): String? =
+        if (night.deepMin == null) null
+        else "Deep ${night.deepMin} m, light ${night.lightMin} m, REM ${night.remMin} m, " +
+            "awake ${night.awakeMin} m. Wake-ups: ${night.wakeups?.toString() ?: "not reported"}."
+
+    /**
      * Saves the night (spec 5.2). `energy3pm` is deliberately untouched: the
      * user cannot know their 15:00 energy in the morning, so the Today screen
      * collects it after 15:00 instead. A re-save must not wipe a rating that
@@ -180,17 +293,30 @@ class MorningViewModel(app: Application) : AndroidViewModel(app) {
             val startMillis = f.sleepStart?.toEpochOn(f.date)
             val endMillis = f.sleepEnd?.toEpochOn(f.date, after = startMillis)
 
-            nights.upsert(
-                Night(
+            // A sync stages the blocks; the save writes them with the night so
+            // the two cannot drift apart (spec 4.2).
+            val blocks = pendingStageBlocks
+            val totals = if (blocks.isNotEmpty()) {
+                SleepAnalysis.stageTotals(blocks)
+            } else {
+                SleepAnalysis.StageTotals(
+                    existing?.deepMin, existing?.lightMin, existing?.remMin,
+                    existing?.awakeMin, existing?.wakeups,
+                )
+            }
+
+            val night = Night(
                     date = f.date,
                     sleepStart = startMillis ?: existing?.sleepStart ?: 0L,
                     sleepEnd = endMillis ?: existing?.sleepEnd ?: 0L,
                     minutes = f.minutes ?: existing?.minutes ?: 0,
-                    deepMin = existing?.deepMin,
-                    lightMin = existing?.lightMin,
-                    remMin = existing?.remMin,
-                    awakeMin = existing?.awakeMin,
-                    wakeups = f.wakeups.toIntOrNull(),
+                    deepMin = totals.deepMin,
+                    lightMin = totals.lightMin,
+                    remMin = totals.remMin,
+                    awakeMin = totals.awakeMin,
+                    // A typed wake-up count wins; otherwise the stage count,
+                    // which is null rather than zero when none were reported.
+                    wakeups = f.wakeups.toIntOrNull() ?: totals.wakeups,
                     restingHr = f.restingHr.toIntOrNull(),
                     spo2 = f.spo2.toDoubleOrNull(),
                     alertness = f.alertness,
@@ -200,9 +326,15 @@ class MorningViewModel(app: Application) : AndroidViewModel(app) {
                     exercise = f.exercise,
                     roomTempC = f.roomTempC.toDoubleOrNull(),
                     notes = f.notes,
-                    editedFields = existing?.editedFields.orEmpty(),
+                    editedFields = f.editedFields,
                 )
-            )
+
+            if (blocks.isNotEmpty()) {
+                nights.saveNightWithStages(night, blocks)
+            } else {
+                nights.upsert(night)
+            }
+            pendingStageBlocks = emptyList()
             _form.value = _form.value.copy(existing = true, savedAt = System.currentTimeMillis())
             onDone()
         }

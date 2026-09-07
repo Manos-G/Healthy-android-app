@@ -94,7 +94,7 @@ fun HealthConnectCard(
 
             if (state.isGranted) {
                 Text(
-                    "The sync button arrives with step 5. Permission is in place for it.",
+                    "Use Sync below to fill the sensor fields for the selected night.",
                     color = HealthyColors.Muted,
                     fontSize = 11.sp,
                     modifier = Modifier.padding(top = 10.dp),

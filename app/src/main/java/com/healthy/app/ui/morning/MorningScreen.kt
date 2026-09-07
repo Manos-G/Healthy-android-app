@@ -59,6 +59,9 @@ fun MorningScreen(
     ) {
         item { DateCard(form, saved, vm) }
         item { HealthConnectCard(health, onGranted = vm::refreshHealthConnect) }
+        if (health.isGranted) {
+            item { SyncCard(form, vm) }
+        }
         item { SleepCard(form, vm) }
         item { AlertnessCard(form, vm) }
         item { ContextCard(form, vm) }
@@ -138,6 +141,51 @@ private fun DateCard(form: MorningForm, saved: Set<String>, vm: MorningViewModel
     }
 }
 
+/**
+ * The sync button (spec 3.4). Manual only: a background sync would cost
+ * battery for data the user only looks at once a day.
+ */
+@Composable
+private fun SyncCard(form: MorningForm, vm: MorningViewModel) {
+    SectionCard {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                CardTitle("Fill from the watch", "Reads the night of ${form.date}.")
+            }
+            Button(
+                onClick = { vm.sync() },
+                shape = RoundedCornerShape(10.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = HealthyColors.Sleep,
+                    contentColor = HealthyColors.Ground,
+                ),
+            ) {
+                Text("Sync", fontWeight = FontWeight.SemiBold)
+            }
+        }
+        if (form.syncMessage != null) {
+            Text(
+                form.syncMessage.orEmpty(),
+                color = HealthyColors.Paper,
+                fontSize = 12.sp,
+                modifier = Modifier.padding(top = 10.dp),
+            )
+        }
+        if (form.editedFields.isNotEmpty()) {
+            Text(
+                "Marked with ✎: your value, kept through a sync. Clear the field to hand it back.",
+                color = HealthyColors.Caffeine,
+                fontSize = 11.sp,
+                modifier = Modifier.padding(top = 6.dp),
+            )
+        }
+    }
+}
+
 @Composable
 private fun SleepCard(form: MorningForm, vm: MorningViewModel) {
     SectionCard {
@@ -150,12 +198,14 @@ private fun SleepCard(form: MorningForm, vm: MorningViewModel) {
                 label = "Fell asleep",
                 value = form.sleepStart,
                 modifier = Modifier.weight(1f),
-            ) { picked -> vm.update { it.copy(sleepStart = picked) } }
+                edited = SyncedField.SLEEP_START in form.editedFields,
+            ) { picked -> vm.edit(SyncedField.SLEEP_START) { it.copy(sleepStart = picked) } }
             TimeField(
                 label = "Woke up",
                 value = form.sleepEnd,
                 modifier = Modifier.weight(1f),
-            ) { picked -> vm.update { it.copy(sleepEnd = picked) } }
+                edited = SyncedField.SLEEP_END in form.editedFields,
+            ) { picked -> vm.edit(SyncedField.SLEEP_END) { it.copy(sleepEnd = picked) } }
         }
         Text(
             form.durationLabel,
@@ -169,18 +219,29 @@ private fun SleepCard(form: MorningForm, vm: MorningViewModel) {
             modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            NumberField("Wake-ups", form.wakeups, Modifier.weight(1f)) { v ->
-                vm.update { it.copy(wakeups = v) }
-            }
-            NumberField("Resting HR", form.restingHr, Modifier.weight(1f)) { v ->
-                vm.update { it.copy(restingHr = v) }
-            }
-            NumberField("Blood O2 %", form.spo2, Modifier.weight(1f), decimal = true) { v ->
-                vm.update { it.copy(spo2 = v) }
-            }
+            NumberField(
+                "Wake-ups", form.wakeups, Modifier.weight(1f),
+                edited = SyncedField.WAKEUPS in form.editedFields,
+            ) { v -> vm.edit(SyncedField.WAKEUPS) { it.copy(wakeups = v) } }
+            NumberField(
+                "Resting HR", form.restingHr, Modifier.weight(1f),
+                edited = SyncedField.RESTING_HR in form.editedFields,
+            ) { v -> vm.edit(SyncedField.RESTING_HR) { it.copy(restingHr = v) } }
+            NumberField(
+                "Blood O2 %", form.spo2, Modifier.weight(1f), decimal = true,
+                edited = SyncedField.SPO2 in form.editedFields,
+            ) { v -> vm.edit(SyncedField.SPO2) { it.copy(spo2 = v) } }
+        }
+        if (form.stageSummary != null) {
+            Text(
+                form.stageSummary.orEmpty(),
+                color = HealthyColors.Sleep,
+                fontSize = 12.sp,
+                modifier = Modifier.padding(top = 10.dp),
+            )
         }
         Text(
-            "Step 5 fills these from Health Connect. Leave a field empty if you do not know it — empty means not reported, which is not the same as zero.",
+            "Leave a field empty if you do not know it — empty means not reported, which is not the same as zero. A field you type is marked and a later sync will not overwrite it.",
             color = HealthyColors.Muted,
             fontSize = 11.sp,
             modifier = Modifier.padding(top = 8.dp),
@@ -341,6 +402,7 @@ private fun NumberField(
     value: String,
     modifier: Modifier = Modifier,
     decimal: Boolean = false,
+    edited: Boolean = false,
     onChange: (String) -> Unit,
 ) {
     OutlinedTextField(
@@ -349,7 +411,7 @@ private fun NumberField(
             val allowed = if (decimal) "0123456789." else "0123456789"
             onChange(raw.filter { it in allowed })
         },
-        label = { Text(label, fontSize = 12.sp) },
+        label = { Text(if (edited) "$label ✎" else label, fontSize = 12.sp) },
         singleLine = true,
         modifier = modifier,
         colors = fieldColors(),
@@ -365,12 +427,17 @@ private fun TimeField(
     label: String,
     value: String?,
     modifier: Modifier = Modifier,
+    edited: Boolean = false,
     onPicked: (String) -> Unit,
 ) {
     var open by remember { mutableStateOf(false) }
 
     Column(modifier) {
-        Text(label, color = HealthyColors.Muted, fontSize = 12.sp)
+        Text(
+            if (edited) "$label ✎" else label,
+            color = if (edited) HealthyColors.Caffeine else HealthyColors.Muted,
+            fontSize = 12.sp,
+        )
         TextButton(
             onClick = { open = true },
             modifier = Modifier.fillMaxWidth(),
