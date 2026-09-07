@@ -17,6 +17,7 @@
     <uses-permission android:name="android.permission.health.READ_HYDRATION" />
     <uses-permission android:name="android.permission.health.WRITE_WEIGHT" />
     <uses-permission android:name="android.permission.health.WRITE_HYDRATION" />
+    <uses-permission android:name="android.permission.health.WRITE_NUTRITION" />
 
     <!--
       Declared so they can be requested, but requested only when the user

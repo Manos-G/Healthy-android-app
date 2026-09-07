@@ -2,8 +2,10 @@ package com.healthy.app.health
 
 import android.content.Context
 import androidx.health.connect.client.records.HydrationRecord
+import androidx.health.connect.client.records.NutritionRecord
 import androidx.health.connect.client.records.WeightRecord
 import androidx.health.connect.client.records.metadata.Metadata
+import androidx.health.connect.client.units.Energy
 import androidx.health.connect.client.units.Mass
 import androidx.health.connect.client.units.Volume
 import java.time.Instant
@@ -40,6 +42,37 @@ class HealthWriter(private val context: Context) {
             endTime = Instant.ofEpochMilli(to),
             endZoneOffset = ZoneId.systemDefault().rules.getOffset(Instant.ofEpochMilli(to)),
             volume = Volume.milliliters(millilitres.toDouble()),
+            metadata = Metadata.manualEntry(),
+        )
+    }
+
+    /**
+     * A meal, so other apps can read what was eaten here (spec 12.5).
+     *
+     * Only the fields Health Connect models are sent; the micronutrients this
+     * app keeps for the comparison table have no place in NutritionRecord.
+     */
+    suspend fun writeNutrition(
+        at: Long,
+        mealType: Int,
+        name: String?,
+        kcal: Double,
+        proteinG: Double,
+        carbsG: Double,
+        fatG: Double,
+    ): Boolean = write {
+        val offset = ZoneId.systemDefault().rules.getOffset(Instant.ofEpochMilli(at))
+        NutritionRecord(
+            startTime = Instant.ofEpochMilli(at),
+            startZoneOffset = offset,
+            endTime = Instant.ofEpochMilli(at + 1),
+            endZoneOffset = offset,
+            name = name,
+            mealType = mealType,
+            energy = Energy.kilocalories(kcal),
+            protein = Mass.grams(proteinG),
+            totalCarbohydrate = Mass.grams(carbsG),
+            totalFat = Mass.grams(fatG),
             metadata = Metadata.manualEntry(),
         )
     }

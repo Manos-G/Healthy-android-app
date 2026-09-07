@@ -159,11 +159,16 @@ class MorningViewModel(app: Application) : AndroidViewModel(app) {
         // Spec 9.4: a beer or a wine already recorded its units, so the form
         // shows the total instead of asking for it again.
         val loggedAlcohol = dayDrinks.sumOf { it.alcoholUnits }
+        // Spec 12.6: the app already knows when the last meal was, so it does
+        // not ask. The gap between it and sleep is a strong input for sleep
+        // quality, which is why the comparison table carries it.
+        val lastMealFromLog = db.mealDao().lastMealTime(from, to)?.let { it.asClockString() }
 
         _form.value = if (night == null) {
             MorningForm(
                 date = date,
                 alcoholUnits = if (loggedAlcohol > 0) trimNumber(loggedAlcohol) else "",
+                lastMeal = lastMealFromLog,
                 caffeineMg = dayDrinks.sumOf { it.mg },
                 caffeineCount = dayDrinks.size,
                 existing = false,
@@ -179,7 +184,7 @@ class MorningViewModel(app: Application) : AndroidViewModel(app) {
                 alertness = night.alertness,
                 alcoholUnits = night.alcoholUnits?.let { trimNumber(it) }
                     ?: loggedAlcohol.takeIf { it > 0 }?.let { trimNumber(it) }.orEmpty(),
-                lastMeal = night.lastMeal,
+                lastMeal = night.lastMeal ?: lastMealFromLog,
                 exercise = night.exercise,
                 roomTempC = night.roomTempC?.let { trimNumber(it) }.orEmpty(),
                 notes = night.notes,

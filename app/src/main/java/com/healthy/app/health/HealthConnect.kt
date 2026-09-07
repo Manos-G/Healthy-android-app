@@ -7,6 +7,7 @@ import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.HeartRateRecord
 import androidx.health.connect.client.records.HydrationRecord
 import androidx.health.connect.client.records.MenstruationFlowRecord
+import androidx.health.connect.client.records.NutritionRecord
 import androidx.health.connect.client.records.MenstruationPeriodRecord
 import androidx.health.connect.client.records.OxygenSaturationRecord
 import androidx.health.connect.client.records.SleepSessionRecord
@@ -53,6 +54,7 @@ object HealthConnect {
     val WRITE_PERMISSIONS: Set<String> = setOf(
         HealthPermission.getWritePermission(WeightRecord::class),
         HealthPermission.getWritePermission(HydrationRecord::class),
+        HealthPermission.getWritePermission(NutritionRecord::class),
     )
 
     enum class Availability {
