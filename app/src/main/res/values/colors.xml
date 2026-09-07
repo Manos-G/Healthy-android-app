@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Taken from healthy-prototype.html. Step 2 moves these into the Compose theme. -->
+    <color name="ground">#131A22</color>
+    <color name="raised">#1B232D</color>
+    <color name="rule">#2C3846</color>
+    <color name="paper">#E9E5DB</color>
+    <color name="muted">#8B95A3</color>
+    <color name="caffeine">#C9743A</color>
+    <color name="sleep">#6FA8A0</color>
+</resources>

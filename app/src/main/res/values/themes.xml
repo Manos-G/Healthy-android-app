@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      Placeholder only. Step 2 replaces this with the Compose Material 3 theme
+      built from the prototype palette: ground #131A22, paper #E9E5DB,
+      caffeine #C9743A, sleep #6FA8A0.
+    -->
+    <style name="Theme.Healthy" parent="android:Theme.Material.NoActionBar">
+        <item name="android:colorBackground">#131A22</item>
+    </style>
+</resources>

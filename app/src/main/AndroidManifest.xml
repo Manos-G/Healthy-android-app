@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!--
+      Step 1 declares no permissions at all.
+
+      INTERNET arrives in step 8 with the barcode scanner and is bound to
+      world.openfoodfacts.org by a network security configuration (spec 11.5).
+      The Health Connect permissions arrive in step 4. Nothing is requested
+      before the step that uses it.
+    -->
+
+    <application
+        android:name=".HealthyApplication"
+        android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.Healthy">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

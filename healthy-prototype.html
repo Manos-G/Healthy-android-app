@@ -1,0 +1,793 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#131A22">
+<title>Nightshift</title>
+<style>
+:root{
+  --ground:#131A22;
+  --raised:#1B232D;
+  --raised2:#222C38;
+  --rule:#2C3846;
+  --paper:#E9E5DB;
+  --muted:#8B95A3;
+  --caf:#C9743A;
+  --caf-dim:#7A4724;
+  --sleep:#6FA8A0;
+  --warn:#C25B4E;
+  --ok:#6FA8A0;
+  --pad:18px;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0;background:var(--ground);color:var(--paper)}
+body{
+  font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  font-size:16px;line-height:1.5;
+  padding-bottom:calc(78px + env(safe-area-inset-bottom));
+  -webkit-font-smoothing:antialiased;
+}
+.num{font-variant-numeric:tabular-nums;font-feature-settings:"tnum"}
+h1,h2,h3{margin:0;font-weight:600;letter-spacing:-0.01em}
+h1{font-size:1.05rem}
+h2{font-size:.95rem;margin-bottom:10px}
+p{margin:0 0 10px}
+.sub{color:var(--muted);font-size:.82rem;line-height:1.45}
+
+header{
+  padding:calc(14px + env(safe-area-inset-top)) var(--pad) 12px;
+  display:flex;align-items:baseline;justify-content:space-between;
+  border-bottom:1px solid var(--rule);
+  position:sticky;top:0;background:var(--ground);z-index:5;
+}
+header .mark{font-size:.75rem;color:var(--muted)}
+main{padding:var(--pad);max-width:640px;margin:0 auto}
+.view{display:none}
+.view.on{display:block}
+
+.card{background:var(--raised);border:1px solid var(--rule);border-radius:12px;padding:16px;margin-bottom:14px}
+
+/* --- hero --- */
+.level{display:flex;align-items:flex-end;gap:10px;margin-bottom:2px}
+.level .big{font-size:3.6rem;font-weight:700;line-height:.9;letter-spacing:-0.04em;color:var(--caf)}
+.level .unit{font-size:1rem;color:var(--muted);padding-bottom:6px}
+.curvewrap{margin:14px -4px 0}
+svg{display:block;width:100%;overflow:visible}
+
+.forecast{
+  display:flex;gap:12px;align-items:center;justify-content:space-between;
+  margin-top:14px;padding-top:14px;border-top:1px solid var(--rule);
+}
+.forecast .fnum{font-size:1.5rem;font-weight:650;letter-spacing:-0.02em}
+.verdict{font-size:.8rem;padding:5px 10px;border-radius:99px;border:1px solid currentColor}
+.verdict.good{color:var(--ok)}
+.verdict.bad{color:var(--warn)}
+
+/* --- drinks --- */
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.drink{
+  background:var(--raised2);border:1px solid var(--rule);color:var(--paper);
+  border-radius:10px;padding:11px 12px;text-align:left;font:inherit;cursor:pointer;
+  display:flex;flex-direction:column;gap:2px;transition:background .12s,border-color .12s;
+}
+.drink:active{background:var(--caf-dim);border-color:var(--caf)}
+.drink .dn{font-size:.86rem;line-height:1.25}
+.drink .dm{font-size:.74rem;color:var(--muted)}
+.groupname{font-size:.78rem;color:var(--muted);margin:14px 0 7px}
+.groupname:first-child{margin-top:0}
+
+.entries{margin-top:4px}
+.entry{
+  display:flex;align-items:center;gap:10px;padding:9px 0;
+  border-bottom:1px solid var(--rule);font-size:.88rem;
+}
+.entry:last-child{border-bottom:0}
+.entry .t{color:var(--muted);font-size:.8rem;min-width:44px}
+.entry .n{flex:1}
+.entry .m{color:var(--caf);font-size:.82rem}
+.del{background:none;border:0;color:var(--muted);font-size:1.1rem;padding:2px 6px;cursor:pointer;line-height:1}
+
+/* --- forms --- */
+label{display:block;font-size:.82rem;color:var(--muted);margin:0 0 5px}
+.field{margin-bottom:14px}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+input,select,textarea{
+  width:100%;background:var(--raised2);border:1px solid var(--rule);color:var(--paper);
+  border-radius:9px;padding:11px 12px;font:inherit;font-size:.95rem;
+}
+input:focus,select,textarea:focus,button:focus-visible{outline:2px solid var(--caf);outline-offset:1px}
+textarea{min-height:64px;resize:vertical}
+input[type=date],input[type=time]{min-height:44px}
+
+.scale{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+.scale button{
+  background:var(--raised2);border:1px solid var(--rule);color:var(--paper);
+  border-radius:9px;padding:12px 0;font:inherit;font-weight:600;cursor:pointer;
+}
+.scale button[aria-pressed=true]{background:var(--sleep);border-color:var(--sleep);color:#0E1519}
+.scale .lbl{grid-column:1/-1;display:flex;justify-content:space-between;font-size:.72rem;color:var(--muted);margin-top:-2px}
+
+.btn{
+  width:100%;background:var(--caf);border:1px solid var(--caf);color:#160C05;
+  border-radius:10px;padding:13px;font:inherit;font-weight:650;cursor:pointer;
+}
+.btn.ghost{background:transparent;color:var(--paper);border-color:var(--rule);font-weight:500}
+.btn+.btn{margin-top:8px}
+
+/* --- trends --- */
+.stat{display:flex;justify-content:space-between;align-items:baseline;padding:9px 0;border-bottom:1px solid var(--rule);font-size:.9rem}
+.stat:last-child{border-bottom:0}
+.stat .v{font-weight:600}
+.cmp{width:100%;border-collapse:collapse;font-size:.85rem}
+.cmp th{text-align:right;font-weight:500;color:var(--muted);font-size:.75rem;padding:0 0 8px;border-bottom:1px solid var(--rule)}
+.cmp th:first-child{text-align:left}
+.cmp td{padding:9px 0;border-bottom:1px solid var(--rule);text-align:right}
+.cmp td:first-child{text-align:left;color:var(--muted)}
+.cmp tr:last-child td{border-bottom:0}
+.cmp .g{color:var(--sleep);font-weight:600}
+.cmp .b{color:var(--warn);font-weight:600}
+
+.empty{color:var(--muted);font-size:.86rem;padding:6px 0}
+
+/* --- nav --- */
+nav{
+  position:fixed;bottom:0;left:0;right:0;display:flex;
+  background:var(--raised);border-top:1px solid var(--rule);
+  padding-bottom:env(safe-area-inset-bottom);z-index:10;
+}
+nav button{
+  flex:1;background:none;border:0;color:var(--muted);font:inherit;font-size:.72rem;
+  padding:11px 4px 12px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px;
+}
+nav button[aria-current=true]{color:var(--paper)}
+nav svg{width:21px;height:21px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+
+.toast{
+  position:fixed;left:50%;transform:translateX(-50%);bottom:calc(88px + env(safe-area-inset-bottom));
+  background:var(--paper);color:#131A22;padding:9px 16px;border-radius:99px;font-size:.85rem;font-weight:550;
+  opacity:0;pointer-events:none;transition:opacity .2s;z-index:20;
+}
+.toast.on{opacity:1}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Nightshift</h1>
+  <span class="mark num" id="hdate"></span>
+</header>
+
+<main>
+
+<!-- ================= TODAY ================= -->
+<section class="view on" id="v-today">
+  <div class="card">
+    <div class="sub">Caffeine in your body now</div>
+    <div class="level">
+      <span class="big num" id="nowmg">0</span><span class="unit">mg</span>
+    </div>
+    <div class="curvewrap"><svg id="curve" viewBox="0 0 340 130" preserveAspectRatio="none" aria-label="Caffeine level over 24 hours"></svg></div>
+    <div class="forecast">
+      <div>
+        <div class="sub">At bedtime <span id="btlabel" class="num"></span></div>
+        <div class="fnum num" id="btmg">0 mg</div>
+      </div>
+      <span class="verdict good" id="verdict">clear</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Add a drink</h2>
+    <div id="catalog"></div>
+    <div class="groupname">Something else</div>
+    <div class="row">
+      <input id="cust-mg" type="number" inputmode="numeric" placeholder="mg" min="0" max="900">
+      <button class="btn ghost" id="cust-add">Add custom</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Today's log</h2>
+    <div class="entries" id="today-entries"></div>
+  </div>
+</section>
+
+<!-- ================= MORNING LOG ================= -->
+<section class="view" id="v-log">
+  <div class="card">
+    <h2>Log last night</h2>
+    <p class="sub">Fill this in once, in the morning. Rate alertness an hour after you wake, not the moment you open your eyes.</p>
+  </div>
+
+  <div class="card">
+    <div class="field">
+      <label for="f-date">Night of</label>
+      <input type="date" id="f-date">
+    </div>
+    <div class="row">
+      <div class="field"><label for="f-bed">Fell asleep</label><input type="time" id="f-bed"></div>
+      <div class="field"><label for="f-wake">Woke up</label><input type="time" id="f-wake"></div>
+    </div>
+    <div class="sub num" id="durcalc">—</div>
+  </div>
+
+  <div class="card">
+    <h2>From your watch</h2>
+    <div class="row">
+      <div class="field"><label for="f-wakeups">Wake-ups</label><input type="number" id="f-wakeups" inputmode="numeric" min="0" max="30"></div>
+      <div class="field"><label for="f-hr">Resting HR</label><input type="number" id="f-hr" inputmode="numeric" min="30" max="120"></div>
+    </div>
+    <div class="row">
+      <div class="field"><label for="f-score">Sleep score</label><input type="number" id="f-score" inputmode="numeric" min="0" max="100"></div>
+      <div class="field"><label for="f-spo2">Blood oxygen %</label><input type="number" id="f-spo2" inputmode="numeric" min="70" max="100"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>How you felt</h2>
+    <div class="field">
+      <label>Alertness, mid-morning</label>
+      <div class="scale" id="sc-alert">
+        <button type="button" data-v="1">1</button><button type="button" data-v="2">2</button>
+        <button type="button" data-v="3">3</button><button type="button" data-v="4">4</button>
+        <button type="button" data-v="5">5</button>
+        <span class="lbl"><span>foggy</span><span>sharp</span></span>
+      </div>
+    </div>
+    <div class="field">
+      <label>Energy, around 3pm</label>
+      <div class="scale" id="sc-energy">
+        <button type="button" data-v="1">1</button><button type="button" data-v="2">2</button>
+        <button type="button" data-v="3">3</button><button type="button" data-v="4">4</button>
+        <button type="button" data-v="5">5</button>
+        <span class="lbl"><span>flat</span><span>strong</span></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Yesterday's inputs</h2>
+    <div class="sub" id="cafauto" style="margin-bottom:12px"></div>
+    <div class="row">
+      <div class="field"><label for="f-alcohol">Alcohol, units</label><input type="number" id="f-alcohol" inputmode="decimal" min="0" max="30" step="0.5"></div>
+      <div class="field"><label for="f-temp">Room temp °C</label><input type="number" id="f-temp" inputmode="decimal" min="5" max="40" step="0.5"></div>
+    </div>
+    <div class="row">
+      <div class="field"><label for="f-meal">Last meal</label><input type="time" id="f-meal"></div>
+      <div class="field"><label for="f-exercise">Exercise</label>
+        <select id="f-exercise"><option value="">—</option><option value="none">None</option><option value="light">Light</option><option value="hard">Hard</option></select>
+      </div>
+    </div>
+    <div class="field"><label for="f-notes">Notes</label><textarea id="f-notes" placeholder="Anything unusual — stress, illness, late screen time"></textarea></div>
+    <button class="btn" id="save-night">Save night</button>
+  </div>
+
+  <div class="card">
+    <h2>Saved nights</h2>
+    <div class="entries" id="night-entries"></div>
+  </div>
+</section>
+
+<!-- ================= TRENDS ================= -->
+<section class="view" id="v-trends">
+  <div class="card">
+    <h2>Your numbers</h2>
+    <div id="averages"></div>
+  </div>
+
+  <div class="card">
+    <h2>Sleep and alertness</h2>
+    <div class="curvewrap"><svg id="spark" viewBox="0 0 340 110" preserveAspectRatio="none"></svg></div>
+    <div class="sub" style="margin-top:8px">Hours slept in teal, alertness in amber, most recent on the right.</div>
+  </div>
+
+  <div class="card">
+    <h2>Best nights against worst</h2>
+    <p class="sub">Your nights sorted by how you felt the next day. The top third sits against the bottom third. A gap that holds as nights add up is worth acting on. A gap from a handful of nights is noise.</p>
+    <div id="compare"></div>
+  </div>
+</section>
+
+<!-- ================= DATA ================= -->
+<section class="view" id="v-data">
+  <div class="card">
+    <h2>Export</h2>
+    <p class="sub">Take your data with you. CSV opens in any spreadsheet. JSON restores everything, including your settings.</p>
+    <button class="btn" id="ex-nights">Export nights, CSV</button>
+    <button class="btn ghost" id="ex-drinks">Export drinks, CSV</button>
+    <button class="btn ghost" id="ex-json">Export everything, JSON</button>
+  </div>
+
+  <div class="card">
+    <h2>Import</h2>
+    <p class="sub">Load a JSON export. This replaces what is on this device.</p>
+    <input type="file" id="imp-file" accept="application/json,.json">
+  </div>
+
+  <div class="card">
+    <h2>Settings</h2>
+    <div class="row">
+      <div class="field"><label for="s-bedtime">Target bedtime</label><input type="time" id="s-bedtime"></div>
+      <div class="field"><label for="s-half">Caffeine half-life, h</label><input type="number" id="s-half" inputmode="decimal" min="2" max="10" step="0.5"></div>
+    </div>
+    <div class="field">
+      <label for="s-thresh">Bedtime limit, mg</label>
+      <input type="number" id="s-thresh" inputmode="numeric" min="0" max="300">
+      <div class="sub" style="margin-top:6px">Below this the app calls you clear. 50 mg is a common rule of thumb, not a measured fact about you. Lower it if caffeine hits you hard.</div>
+    </div>
+    <button class="btn ghost" id="wipe">Delete all data</button>
+  </div>
+
+  <div class="card">
+    <h2>What this can and cannot tell you</h2>
+    <p class="sub">The decay curve is a one-compartment model with a flat half-life. It ignores absorption time and it does not know your genetics. Treat it as a comparison tool between your own days, not a measurement.</p>
+    <p class="sub">Storage lives in this browser. Clearing site data erases it. Export once a week.</p>
+  </div>
+</section>
+
+</main>
+
+<nav>
+  <button data-v="today" aria-current="true"><svg viewBox="0 0 24 24"><path d="M17 8h1a4 4 0 0 1 0 8h-1M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4zM6 2v3M10 2v3M14 2v3"/></svg>Today</button>
+  <button data-v="log"><svg viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9z"/></svg>Log</button>
+  <button data-v="trends"><svg viewBox="0 0 24 24"><path d="M3 17l5-6 4 4 5-7 4 5"/><path d="M3 21h18"/></svg>Trends</button>
+  <button data-v="data"><svg viewBox="0 0 24 24"><path d="M12 3v12M8 11l4 4 4-4M4 21h16"/></svg>Data</button>
+</nav>
+
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+
+/* ---------- storage, with a fallback so it never hard-fails ---------- */
+var mem={};
+var store={
+  get:function(k){try{return localStorage.getItem(k);}catch(e){return k in mem?mem[k]:null;}},
+  set:function(k,v){try{localStorage.setItem(k,v);}catch(e){mem[k]=v;}},
+  del:function(k){try{localStorage.removeItem(k);}catch(e){delete mem[k];}}
+};
+function load(k,d){var r=store.get(k);if(!r)return d;try{return JSON.parse(r);}catch(e){return d;}}
+function save(k,v){store.set(k,JSON.stringify(v));}
+
+var drinks=load("ns.drinks",[]);
+var nights=load("ns.nights",[]);
+var cfg=load("ns.cfg",{bedtime:"23:30",half:5,thresh:50});
+
+/* ---------- catalog ---------- */
+var CATALOG=[
+  ["Coffee",[
+    ["Freddo espresso",125],["Freddo cappuccino",125],["Frappé",70],
+    ["Greek coffee",60],["Espresso",63],["Double espresso",125],
+    ["Cold brew, 300 ml",200],["Filter coffee",95],["Cappuccino",75],["Instant coffee",60]
+  ]],
+  ["Energy",[
+    ["Hell 250 ml",80],["Hell 500 ml",160],["Red Bull 250 ml",80],
+    ["Red Bull 355 ml",114],["Monster 500 ml",160]
+  ]],
+  ["Tea and soft",[
+    ["Black tea",47],["Green tea",28],["Coca-Cola 330 ml",32],
+    ["Coke Zero 330 ml",34],["Dark chocolate 50 g",40]
+  ]]
+];
+
+/* ---------- helpers ---------- */
+function pad(n){return n<10?"0"+n:""+n;}
+function hhmm(d){return pad(d.getHours())+":"+pad(d.getMinutes());}
+function iso(d){return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());}
+function parseHM(s){var p=(s||"").split(":");return {h:+p[0]||0,m:+p[1]||0};}
+function toast(msg){var t=document.getElementById("toast");t.textContent=msg;t.classList.add("on");
+  clearTimeout(t._x);t._x=setTimeout(function(){t.classList.remove("on");},1600);}
+function round(n,d){var f=Math.pow(10,d||0);return Math.round(n*f)/f;}
+function mean(a){return a.length?a.reduce(function(x,y){return x+y;},0)/a.length:null;}
+
+/* day window runs 04:00 to 04:00 so late nights stay on the right day */
+function dayStart(ts){var d=new Date(ts);if(d.getHours()<4)d.setDate(d.getDate()-1);
+  d.setHours(4,0,0,0);return d.getTime();}
+
+/* ---------- caffeine model ---------- */
+function levelAt(t){
+  var hl=cfg.half*3600000,total=0;
+  for(var i=0;i<drinks.length;i++){
+    var d=drinks[i];
+    if(d.ts<=t) total+=d.mg*Math.pow(0.5,(t-d.ts)/hl);
+  }
+  return total;
+}
+function bedtimeTs(){
+  var hm=parseHM(cfg.bedtime),now=new Date(),b=new Date();
+  b.setHours(hm.h,hm.m,0,0);
+  if(b.getTime()<=now.getTime()) b.setDate(b.getDate()+1);
+  return b.getTime();
+}
+
+/* ---------- today view ---------- */
+function drawCurve(){
+  var svg=document.getElementById("curve");
+  var t0=dayStart(Date.now()),t1=t0+86400000,now=Date.now();
+  var W=340,H=130,N=120,pts=[],maxv=1;
+  for(var i=0;i<=N;i++){
+    var t=t0+(t1-t0)*i/N,v=levelAt(t);
+    pts.push([i/N*W,v]); if(v>maxv)maxv=v;
+  }
+  maxv=Math.max(maxv,cfg.thresh*1.6,60);
+  var y=function(v){return H-6-(v/maxv)*(H-18);};
+  var line="",area="";
+  for(var j=0;j<pts.length;j++){
+    line+=(j?"L":"M")+round(pts[j][0],1)+" "+round(y(pts[j][1]),1)+" ";
+  }
+  area=line+"L"+W+" "+H+" L0 "+H+" Z";
+
+  var nowX=Math.min(W,Math.max(0,(now-t0)/(t1-t0)*W));
+  var bt=bedtimeTs(), btX=(bt-t0)/(t1-t0)*W;
+
+  var s='<defs><linearGradient id="g" x1="0" x2="0" y1="0" y2="1">'+
+        '<stop offset="0" stop-color="#C9743A" stop-opacity=".38"/>'+
+        '<stop offset="1" stop-color="#C9743A" stop-opacity="0"/></linearGradient></defs>';
+  s+='<line x1="0" y1="'+round(y(cfg.thresh),1)+'" x2="'+W+'" y2="'+round(y(cfg.thresh),1)+
+     '" stroke="#2C3846" stroke-width="1" stroke-dasharray="3 4"/>';
+  s+='<path d="'+area+'" fill="url(#g)"/>';
+  s+='<path d="'+line+'" fill="none" stroke="#C9743A" stroke-width="2" stroke-linejoin="round"/>';
+
+  if(btX>=0&&btX<=W){
+    s+='<line x1="'+round(btX,1)+'" y1="4" x2="'+round(btX,1)+'" y2="'+(H-4)+
+       '" stroke="#6FA8A0" stroke-width="1.2" stroke-dasharray="2 3"/>';
+  }
+  s+='<line x1="'+round(nowX,1)+'" y1="0" x2="'+round(nowX,1)+'" y2="'+H+
+     '" stroke="#E9E5DB" stroke-width="1" opacity=".45"/>';
+
+  for(var k=0;k<drinks.length;k++){
+    var d=drinks[k];
+    if(d.ts>=t0&&d.ts<=t1){
+      var x=(d.ts-t0)/(t1-t0)*W;
+      s+='<circle cx="'+round(x,1)+'" cy="'+round(y(levelAt(d.ts)),1)+'" r="3.2" fill="#C9743A" stroke="#131A22" stroke-width="1.5"/>';
+    }
+  }
+  svg.innerHTML=s;
+}
+
+function renderToday(){
+  document.getElementById("nowmg").textContent=Math.round(levelAt(Date.now()));
+  var bt=bedtimeTs(),bmg=Math.round(levelAt(bt));
+  document.getElementById("btlabel").textContent=cfg.bedtime;
+  document.getElementById("btmg").textContent=bmg+" mg";
+  var v=document.getElementById("verdict"),ok=bmg<=cfg.thresh;
+  v.textContent=ok?"clear":"still active";
+  v.className="verdict "+(ok?"good":"bad");
+  drawCurve();
+
+  var t0=dayStart(Date.now());
+  var todays=drinks.filter(function(d){return d.ts>=t0;})
+                   .sort(function(a,b){return b.ts-a.ts;});
+  var el=document.getElementById("today-entries");
+  if(!todays.length){el.innerHTML='<div class="empty">Nothing logged yet today.</div>';return;}
+  el.innerHTML=todays.map(function(d){
+    return '<div class="entry"><span class="t num">'+hhmm(new Date(d.ts))+'</span>'+
+           '<span class="n">'+esc(d.name)+'</span>'+
+           '<span class="m num">'+d.mg+' mg</span>'+
+           '<button class="del" data-id="'+d.id+'" aria-label="Delete">&times;</button></div>';
+  }).join("");
+}
+function esc(s){return String(s).replace(/[<>&"]/g,function(c){
+  return {"<":"&lt;",">":"&gt;","&":"&amp;",'"':"&quot;"}[c];});}
+
+function addDrink(name,mg){
+  drinks.push({id:Date.now()+"-"+Math.random().toString(36).slice(2,7),name:name,mg:mg,ts:Date.now()});
+  save("ns.drinks",drinks);renderToday();toast(name+" logged");
+}
+
+function buildCatalog(){
+  var html="";
+  CATALOG.forEach(function(g){
+    html+='<div class="groupname">'+g[0]+'</div><div class="grid">';
+    g[1].forEach(function(d){
+      html+='<button class="drink" data-n="'+esc(d[0])+'" data-mg="'+d[1]+'">'+
+            '<span class="dn">'+esc(d[0])+'</span><span class="dm num">'+d[1]+' mg</span></button>';
+    });
+    html+='</div>';
+  });
+  document.getElementById("catalog").innerHTML=html;
+}
+
+/* ---------- morning log ---------- */
+var sel={alert:null,energy:null};
+function bindScale(id,key){
+  var box=document.getElementById(id);
+  box.addEventListener("click",function(e){
+    var b=e.target.closest("button[data-v]");if(!b)return;
+    sel[key]=+b.dataset.v;
+    box.querySelectorAll("button").forEach(function(x){
+      x.setAttribute("aria-pressed",x===b?"true":"false");});
+  });
+}
+function updateDur(){
+  var b=document.getElementById("f-bed").value,w=document.getElementById("f-wake").value;
+  var out=document.getElementById("durcalc");
+  if(!b||!w){out.textContent="—";return;}
+  var bh=parseHM(b),wh=parseHM(w);
+  var mins=(wh.h*60+wh.m)-(bh.h*60+bh.m); if(mins<=0)mins+=1440;
+  out.textContent=Math.floor(mins/60)+" h "+pad(mins%60)+" m asleep";
+}
+function caffeineForNight(dateStr){
+  var d=new Date(dateStr+"T04:00:00"),t0=d.getTime(),t1=t0+86400000;
+  var list=drinks.filter(function(x){return x.ts>=t0&&x.ts<t1;});
+  var total=list.reduce(function(s,x){return s+x.mg;},0);
+  var last=list.length?Math.max.apply(null,list.map(function(x){return x.ts;})):null;
+  return {total:total,lastTs:last,n:list.length};
+}
+function refreshCafAuto(){
+  var ds=document.getElementById("f-date").value;
+  var el=document.getElementById("cafauto");
+  if(!ds){el.textContent="";return;}
+  var c=caffeineForNight(ds);
+  el.textContent=c.n?(c.total+" mg from "+c.n+" drink"+(c.n>1?"s":"")+
+    ", last at "+hhmm(new Date(c.lastTs))+". Saved with this night."):
+    "No caffeine logged for that day.";
+}
+function saveNight(){
+  var ds=document.getElementById("f-date").value;
+  if(!ds){toast("Pick a date first");return;}
+  var bed=document.getElementById("f-bed").value,wake=document.getElementById("f-wake").value;
+  var mins=null;
+  if(bed&&wake){var bh=parseHM(bed),wh=parseHM(wake);
+    mins=(wh.h*60+wh.m)-(bh.h*60+bh.m); if(mins<=0)mins+=1440;}
+  var c=caffeineForNight(ds);
+  var num=function(id){var v=document.getElementById(id).value;return v===""?null:+v;};
+  var rec={
+    date:ds,bed:bed||null,wake:wake||null,minutes:mins,
+    wakeups:num("f-wakeups"),hr:num("f-hr"),score:num("f-score"),spo2:num("f-spo2"),
+    alert:sel.alert,energy:sel.energy,
+    alcohol:num("f-alcohol"),temp:num("f-temp"),
+    meal:document.getElementById("f-meal").value||null,
+    exercise:document.getElementById("f-exercise").value||null,
+    notes:document.getElementById("f-notes").value||"",
+    cafMg:c.total,cafLast:c.lastTs?hhmm(new Date(c.lastTs)):null
+  };
+  nights=nights.filter(function(n){return n.date!==ds;});
+  nights.push(rec);
+  nights.sort(function(a,b){return a.date<b.date?1:-1;});
+  save("ns.nights",nights);
+  toast("Night saved");
+  clearForm();renderNights();renderTrends();
+}
+function clearForm(){
+  ["f-wakeups","f-hr","f-score","f-spo2","f-alcohol","f-temp","f-notes"].forEach(function(id){
+    document.getElementById(id).value="";});
+  document.getElementById("f-exercise").value="";
+  sel.alert=null;sel.energy=null;
+  document.querySelectorAll(".scale button").forEach(function(b){b.setAttribute("aria-pressed","false");});
+}
+function renderNights(){
+  var el=document.getElementById("night-entries");
+  if(!nights.length){el.innerHTML='<div class="empty">No nights saved yet.</div>';return;}
+  el.innerHTML=nights.slice(0,14).map(function(n){
+    var h=n.minutes!=null?Math.floor(n.minutes/60)+"h"+pad(n.minutes%60):"—";
+    return '<div class="entry"><span class="t num">'+n.date.slice(5)+'</span>'+
+      '<span class="n num">'+h+'</span>'+
+      '<span class="m num">'+(n.alert!=null?"alert "+n.alert:"—")+'</span>'+
+      '<button class="del" data-date="'+n.date+'" aria-label="Delete">&times;</button></div>';
+  }).join("");
+}
+
+/* ---------- trends ---------- */
+function renderTrends(){
+  var av=document.getElementById("averages");
+  if(!nights.length){
+    av.innerHTML='<div class="empty">Log a few mornings and your numbers appear here.</div>';
+    document.getElementById("compare").innerHTML='<div class="empty">Six nights unlock this comparison.</div>';
+    document.getElementById("spark").innerHTML="";
+    return;
+  }
+  var pick=function(k){return nights.map(function(n){return n[k];})
+    .filter(function(v){return v!=null&&v!=="";});};
+  var rows=[
+    ["Nights logged",nights.length,""],
+    ["Average sleep",fmtH(mean(pick("minutes"))),""],
+    ["Average alertness",fmtN(mean(pick("alert")),1),"/ 5"],
+    ["Average 3pm energy",fmtN(mean(pick("energy")),1),"/ 5"],
+    ["Average resting HR",fmtN(mean(pick("hr")),0),"bpm"],
+    ["Average caffeine",fmtN(mean(pick("cafMg")),0),"mg"],
+    ["Average wake-ups",fmtN(mean(pick("wakeups")),1),""]
+  ];
+  av.innerHTML=rows.map(function(r){
+    return '<div class="stat"><span>'+r[0]+'</span><span class="v num">'+r[1]+
+           (r[2]?' <span class="sub">'+r[2]+'</span>':'')+'</span></div>';}).join("");
+  drawSpark();drawCompare();
+}
+function fmtH(m){return m==null?"—":Math.floor(m/60)+" h "+pad(Math.round(m%60))+" m";}
+function fmtN(v,d){return v==null?"—":round(v,d).toFixed(d);}
+
+function drawSpark(){
+  var svg=document.getElementById("spark");
+  var data=nights.slice(0,30).reverse();
+  if(data.length<2){svg.innerHTML="";return;}
+  var W=340,H=110,n=data.length;
+  var hrs=data.map(function(d){return d.minutes!=null?d.minutes/60:null;});
+  var al=data.map(function(d){return d.alert!=null?d.alert:null;});
+  var hv=hrs.filter(function(v){return v!=null;});
+  var lo=Math.min.apply(null,hv.concat([5])),hi=Math.max.apply(null,hv.concat([9]));
+  var x=function(i){return n<2?0:i/(n-1)*W;};
+  var yH=function(v){return H-8-((v-lo)/((hi-lo)||1))*(H-20);};
+  var yA=function(v){return H-8-((v-1)/4)*(H-20);};
+  var path=function(arr,fn){
+    var s="",started=false;
+    arr.forEach(function(v,i){ if(v==null)return;
+      s+=(started?"L":"M")+round(x(i),1)+" "+round(fn(v),1)+" ";started=true;});
+    return s;
+  };
+  var s='<path d="'+path(hrs,yH)+'" fill="none" stroke="#6FA8A0" stroke-width="2" stroke-linejoin="round"/>';
+  s+='<path d="'+path(al,yA)+'" fill="none" stroke="#C9743A" stroke-width="1.6" stroke-dasharray="4 3" stroke-linejoin="round"/>';
+  hrs.forEach(function(v,i){ if(v!=null)
+    s+='<circle cx="'+round(x(i),1)+'" cy="'+round(yH(v),1)+'" r="2.2" fill="#6FA8A0"/>';});
+  svg.innerHTML=s;
+}
+
+function drawCompare(){
+  var el=document.getElementById("compare");
+  var scored=nights.filter(function(n){return n.alert!=null||n.energy!=null;})
+    .map(function(n){
+      var vals=[n.alert,n.energy].filter(function(v){return v!=null;});
+      return {n:n,s:mean(vals)};
+    });
+  if(scored.length<6){
+    el.innerHTML='<div class="empty">'+scored.length+' of 6 nights rated. Keep going.</div>';return;
+  }
+  scored.sort(function(a,b){return b.s-a.s;});
+  var k=Math.max(2,Math.floor(scored.length/3));
+  var good=scored.slice(0,k).map(function(o){return o.n;});
+  var bad=scored.slice(-k).map(function(o){return o.n;});
+
+  var metrics=[
+    ["Hours slept",function(n){return n.minutes!=null?n.minutes/60:null;},1,"h"],
+    ["Bedtime",function(n){if(!n.bed)return null;var p=parseHM(n.bed);
+      var h=p.h+p.m/60;return h<12?h+24:h;},2,"clock"],
+    ["Caffeine",function(n){return n.cafMg!=null?n.cafMg:null;},0," mg"],
+    ["Last caffeine",function(n){if(!n.cafLast)return null;var p=parseHM(n.cafLast);
+      return p.h+p.m/60;},2,"clock"],
+    ["Wake-ups",function(n){return n.wakeups;},1,""],
+    ["Resting HR",function(n){return n.hr;},0," bpm"],
+    ["Alcohol",function(n){return n.alcohol;},1," u"],
+    ["Room temp",function(n){return n.temp;},1,"°"]
+  ];
+  var body="";
+  metrics.forEach(function(m){
+    var g=mean(good.map(m[1]).filter(function(v){return v!=null;}));
+    var b=mean(bad.map(m[1]).filter(function(v){return v!=null;}));
+    if(g==null&&b==null)return;
+    var f=function(v){
+      if(v==null)return"—";
+      if(m[3]==="clock"){var hh=Math.floor(v)%24,mm=Math.round((v-Math.floor(v))*60);
+        return pad(hh)+":"+pad(mm);}
+      return round(v,m[2]).toFixed(m[2])+m[3];
+    };
+    body+='<tr><td>'+m[0]+'</td><td class="g num">'+f(g)+'</td><td class="b num">'+f(b)+'</td></tr>';
+  });
+  el.innerHTML='<table class="cmp"><thead><tr><th>Metric</th><th>Best '+k+
+    '</th><th>Worst '+k+'</th></tr></thead><tbody>'+body+'</tbody></table>';
+}
+
+/* ---------- export ---------- */
+function download(name,text,type){
+  var blob=new Blob([text],{type:type||"text/plain;charset=utf-8"});
+  var url=URL.createObjectURL(blob),a=document.createElement("a");
+  a.href=url;a.download=name;document.body.appendChild(a);a.click();
+  setTimeout(function(){URL.revokeObjectURL(url);a.remove();},400);
+}
+function csv(rows){
+  return rows.map(function(r){
+    return r.map(function(c){
+      c=(c==null?"":String(c));
+      return /[",\n]/.test(c)?'"'+c.replace(/"/g,'""')+'"':c;
+    }).join(",");
+  }).join("\n");
+}
+function exportNights(){
+  var head=["date","bed","wake","minutes","hours","wakeups","resting_hr","sleep_score","spo2",
+    "alertness","energy_3pm","caffeine_mg","last_caffeine","alcohol_units","last_meal",
+    "exercise","room_temp_c","notes"];
+  var rows=[head].concat(nights.slice().reverse().map(function(n){
+    return [n.date,n.bed,n.wake,n.minutes,n.minutes!=null?round(n.minutes/60,2):"",
+      n.wakeups,n.hr,n.score,n.spo2,n.alert,n.energy,n.cafMg,n.cafLast,n.alcohol,
+      n.meal,n.exercise,n.temp,n.notes];
+  }));
+  download("nightshift-nights.csv",csv(rows),"text/csv;charset=utf-8");
+}
+function exportDrinks(){
+  var rows=[["datetime","date","time","drink","mg"]].concat(
+    drinks.slice().sort(function(a,b){return a.ts-b.ts;}).map(function(d){
+      var t=new Date(d.ts);
+      return [t.toISOString(),iso(t),hhmm(t),d.name,d.mg];
+    }));
+  download("nightshift-drinks.csv",csv(rows),"text/csv;charset=utf-8");
+}
+
+/* ---------- wiring ---------- */
+document.querySelector("nav").addEventListener("click",function(e){
+  var b=e.target.closest("button[data-v]");if(!b)return;
+  document.querySelectorAll("nav button").forEach(function(x){
+    x.setAttribute("aria-current",x===b?"true":"false");});
+  document.querySelectorAll(".view").forEach(function(v){v.classList.remove("on");});
+  document.getElementById("v-"+b.dataset.v).classList.add("on");
+  window.scrollTo(0,0);
+  if(b.dataset.v==="trends")renderTrends();
+  if(b.dataset.v==="today")renderToday();
+});
+document.getElementById("catalog").addEventListener("click",function(e){
+  var b=e.target.closest(".drink");if(!b)return;
+  addDrink(b.dataset.n,+b.dataset.mg);
+});
+document.getElementById("cust-add").addEventListener("click",function(){
+  var i=document.getElementById("cust-mg"),mg=+i.value;
+  if(!mg||mg<=0){toast("Enter a mg amount");return;}
+  addDrink("Custom",mg);i.value="";
+});
+document.getElementById("today-entries").addEventListener("click",function(e){
+  var b=e.target.closest(".del");if(!b)return;
+  drinks=drinks.filter(function(d){return d.id!==b.dataset.id;});
+  save("ns.drinks",drinks);renderToday();
+});
+document.getElementById("night-entries").addEventListener("click",function(e){
+  var b=e.target.closest(".del");if(!b)return;
+  nights=nights.filter(function(n){return n.date!==b.dataset.date;});
+  save("ns.nights",nights);renderNights();renderTrends();
+});
+["f-bed","f-wake"].forEach(function(id){
+  document.getElementById(id).addEventListener("change",updateDur);});
+document.getElementById("f-date").addEventListener("change",refreshCafAuto);
+document.getElementById("save-night").addEventListener("click",saveNight);
+document.getElementById("ex-nights").addEventListener("click",exportNights);
+document.getElementById("ex-drinks").addEventListener("click",exportDrinks);
+document.getElementById("ex-json").addEventListener("click",function(){
+  download("nightshift-backup.json",JSON.stringify(
+    {v:1,exported:new Date().toISOString(),cfg:cfg,nights:nights,drinks:drinks},null,2),
+    "application/json");
+});
+document.getElementById("imp-file").addEventListener("change",function(e){
+  var f=e.target.files[0];if(!f)return;
+  var r=new FileReader();
+  r.onload=function(){
+    try{
+      var d=JSON.parse(r.result);
+      if(!d||!Array.isArray(d.nights))throw 0;
+      nights=d.nights;drinks=d.drinks||[];cfg=d.cfg||cfg;
+      save("ns.nights",nights);save("ns.drinks",drinks);save("ns.cfg",cfg);
+      loadCfg();renderToday();renderNights();renderTrends();toast("Data restored");
+    }catch(err){toast("That file did not parse");}
+    e.target.value="";
+  };
+  r.readAsText(f);
+});
+document.getElementById("wipe").addEventListener("click",function(){
+  if(!confirm("Delete every night and drink on this device? Export first if you want a copy."))return;
+  nights=[];drinks=[];store.del("ns.nights");store.del("ns.drinks");
+  renderToday();renderNights();renderTrends();toast("Data deleted");
+});
+["s-bedtime","s-half","s-thresh"].forEach(function(id){
+  document.getElementById(id).addEventListener("change",function(){
+    cfg.bedtime=document.getElementById("s-bedtime").value||"23:30";
+    cfg.half=+document.getElementById("s-half").value||5;
+    cfg.thresh=+document.getElementById("s-thresh").value||50;
+    save("ns.cfg",cfg);renderToday();toast("Setting saved");
+  });
+});
+function loadCfg(){
+  document.getElementById("s-bedtime").value=cfg.bedtime;
+  document.getElementById("s-half").value=cfg.half;
+  document.getElementById("s-thresh").value=cfg.thresh;
+}
+
+/* ---------- boot ---------- */
+(function init(){
+  var now=new Date();
+  document.getElementById("hdate").textContent=
+    now.toLocaleDateString(undefined,{weekday:"short",day:"numeric",month:"short"});
+  var y=new Date(now.getTime()-86400000);
+  document.getElementById("f-date").value=iso(now.getHours()<12?y:now);
+  buildCatalog();bindScale("sc-alert","alert");bindScale("sc-energy","energy");
+  loadCfg();renderToday();renderNights();renderTrends();refreshCafAuto();
+  setInterval(renderToday,60000);
+})();
+</script>
+</body>
+</html>
