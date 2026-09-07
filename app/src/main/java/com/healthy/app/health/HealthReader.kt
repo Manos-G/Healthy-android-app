@@ -2,8 +2,10 @@ package com.healthy.app.health
 
 import android.content.Context
 import androidx.health.connect.client.records.HeartRateRecord
+import androidx.health.connect.client.records.HydrationRecord
 import androidx.health.connect.client.records.OxygenSaturationRecord
 import androidx.health.connect.client.records.SleepSessionRecord
+import androidx.health.connect.client.records.WeightRecord
 import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
 import com.healthy.app.core.HealthyDay
@@ -139,6 +141,62 @@ class HealthReader(private val context: Context) {
         }.getOrElse { Result.Failed(it.message ?: it::class.simpleName ?: "unknown error") }
     }
 
+    data class ExternalWeight(
+        val kilograms: Double,
+        val atMillis: Long,
+        /** Which app wrote it, so the user can see whether OpenScale does. */
+        val source: String,
+    )
+
+    /**
+     * Weight records written by anything (spec 3.3).
+     *
+     * The spec says read as well as write, so a scale that publishes to Health
+     * Connect is picked up rather than ignored. Records this app wrote itself
+     * are excluded: re-importing our own writes would double-count them.
+     */
+    suspend fun readWeights(sinceDays: Long = 365): List<ExternalWeight> {
+        val client = HealthConnect.client(context) ?: return emptyList()
+        val ourPackage = context.packageName
+        val window = TimeRangeFilter.between(
+            Instant.now().minusSeconds(sinceDays * 24 * 60 * 60),
+            Instant.now(),
+        )
+        return runCatching {
+            client.readRecords(
+                ReadRecordsRequest(WeightRecord::class, timeRangeFilter = window)
+            ).records
+                .filter { it.metadata.dataOrigin.packageName != ourPackage }
+                .map {
+                    ExternalWeight(
+                        kilograms = it.weight.inKilograms,
+                        atMillis = it.time.toEpochMilli(),
+                        source = it.metadata.dataOrigin.packageName,
+                    )
+                }
+        }.getOrDefault(emptyList())
+    }
+
+    /** Hydration written by other apps for a logical day, in millilitres. */
+    suspend fun readHydrationMl(from: Long, to: Long): Int {
+        val client = HealthConnect.client(context) ?: return 0
+        val ourPackage = context.packageName
+        return runCatching {
+            client.readRecords(
+                ReadRecordsRequest(
+                    HydrationRecord::class,
+                    timeRangeFilter = TimeRangeFilter.between(
+                        Instant.ofEpochMilli(from),
+                        Instant.ofEpochMilli(to),
+                    ),
+                )
+            ).records
+                .filter { it.metadata.dataOrigin.packageName != ourPackage }
+                .sumOf { it.volume.inMilliliters }
+                .toInt()
+        }.getOrDefault(0)
+    }
+
     /**
      * A diagnostic sweep used to answer the open questions in START-HERE:
      * whether the watch writes awake blocks, and how recent the heart rate is.
@@ -154,6 +212,9 @@ class HealthReader(private val context: Context) {
         /** Which apps are writing, now that more than one can be. */
         val sleepSources: Set<String>,
         val heartRateSources: Set<String>,
+        /** Answers spec 8.4's open question: does OpenScale write here? */
+        val weightRecords: Int,
+        val weightSources: Set<String>,
     )
 
     suspend fun survey(days: Long = 7): Survey? {
@@ -174,6 +235,13 @@ class HealthReader(private val context: Context) {
             val oxygen = client.readRecords(
                 ReadRecordsRequest(OxygenSaturationRecord::class, timeRangeFilter = window)
             ).records
+            // A year, because a weight history is sparse by nature.
+            val weights = client.readRecords(
+                ReadRecordsRequest(
+                    WeightRecord::class,
+                    timeRangeFilter = TimeRangeFilter.between(now.minusSeconds(365 * 86400), now),
+                )
+            ).records
 
             Survey(
                 sessions = sessions.size,
@@ -186,6 +254,8 @@ class HealthReader(private val context: Context) {
                 spo2Samples = oxygen.size,
                 sleepSources = sessions.map { it.metadata.dataOrigin.packageName }.toSet(),
                 heartRateSources = heart.map { it.metadata.dataOrigin.packageName }.toSet(),
+                weightRecords = weights.size,
+                weightSources = weights.map { it.metadata.dataOrigin.packageName }.toSet(),
             )
         }.getOrNull()
     }

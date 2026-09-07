@@ -368,12 +368,24 @@ private fun ImportCard(vm: WeightViewModel) {
     SectionCard {
         Text("From a scale", color = HealthyColors.Paper, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
         Text(
-            "OpenScale reads Bluetooth scales and exports a CSV. Import it here. " +
-                "A date already stored is left alone, so re-importing is safe.",
+            "Health Connect first, then an OpenScale CSV, then the wheel above. " +
+                "A date already stored is left alone either way, so both are safe to repeat.",
             color = HealthyColors.Muted,
             fontSize = 12.sp,
             modifier = Modifier.padding(top = 4.dp, bottom = 10.dp),
         )
+        androidx.compose.material3.OutlinedButton(
+            onClick = { vm.syncFromHealthConnect() },
+            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+            shape = RoundedCornerShape(10.dp),
+            border = androidx.compose.foundation.BorderStroke(1.dp, HealthyColors.Rule),
+            colors = ButtonDefaults.outlinedButtonColors(
+                containerColor = HealthyColors.Raised2,
+                contentColor = HealthyColors.Paper,
+            ),
+        ) {
+            Text("Read weights from Health Connect", fontSize = 14.sp)
+        }
         androidx.compose.material3.OutlinedButton(
             onClick = { picker.launch(arrayOf("text/csv", "text/comma-separated-values", "*/*")) },
             modifier = Modifier.fillMaxWidth(),

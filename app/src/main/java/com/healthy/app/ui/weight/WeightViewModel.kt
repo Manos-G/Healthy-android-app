@@ -44,6 +44,7 @@ class WeightViewModel(app: Application) : AndroidViewModel(app) {
     private val dao = HealthyDatabase.get(app).weightDao()
     private val _refusal = MutableStateFlow<String?>(null)
     private val writer = HealthWriter(app)
+    private val reader = com.healthy.app.health.HealthReader(app)
 
     private val settingsStore = SettingsStore(app)
 
@@ -118,6 +119,40 @@ class WeightViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _importStatus = MutableStateFlow<String?>(null)
     val importStatus: StateFlow<String?> = _importStatus
+
+    /**
+     * Pulls weights other apps wrote to Health Connect (spec 8.4, first in the
+     * order it gives). A date already stored is left alone, so this can be run
+     * repeatedly and never overwrites a hand-corrected value.
+     */
+    fun syncFromHealthConnect() {
+        viewModelScope.launch {
+            val external = reader.readWeights()
+            if (external.isEmpty()) {
+                _importStatus.value =
+                    "No weight from other apps in Health Connect. Nothing else is writing it."
+                return@launch
+            }
+            val rows = external
+                .groupBy { HealthyDay.dayOf(it.atMillis) }
+                .map { (day, sameDay) ->
+                    val latest = sameDay.maxBy { it.atMillis }
+                    Weight(
+                        date = day,
+                        weightKg = latest.kilograms,
+                        timestamp = latest.atMillis,
+                        source = Weight.HEALTH_CONNECT,
+                    )
+                }
+            val before = dao.count()
+            dao.insertIgnoringExisting(rows)
+            val added = dao.count() - before
+            val sources = external.map { it.source.substringAfterLast('.') }.toSet()
+            _importStatus.value =
+                "Added $added reading${if (added == 1) "" else "s"} from " +
+                    "${sources.joinToString(", ")}, skipped ${rows.size - added} already stored."
+        }
+    }
 
     /**
      * Imports an OpenScale export (spec 8.4).

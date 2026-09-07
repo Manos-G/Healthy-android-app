@@ -129,7 +129,8 @@ class DataViewModel(app: Application) : AndroidViewModel(app) {
             _survey.value = "Reading…"
             val result = HealthReader(getApplication()).survey(days = 7)
             _survey.value = when (result) {
-                null -> "Health Connect is unavailable or permission is not granted."
+                null -> "Could not read Health Connect. Either it is unavailable, or one " +
+                    "of the permissions has not been granted — reconnect from the Morning tab."
                 else -> buildString {
                     append("Last 7 days\n")
                     append("Sleep sessions: ${result.sessions}")
@@ -152,6 +153,9 @@ class DataViewModel(app: Application) : AndroidViewModel(app) {
                     append(sourcesOf(result.sleepSources))
                     append("\nHeart rate written by: ")
                     append(sourcesOf(result.heartRateSources))
+                    append("\nWeight records (1 year): ${result.weightRecords}")
+                    append("\nWeight written by: ")
+                    append(sourcesOf(result.weightSources))
                 }
             }
         }

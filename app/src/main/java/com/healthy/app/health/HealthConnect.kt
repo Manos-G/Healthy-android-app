@@ -32,6 +32,10 @@ object HealthConnect {
         HealthPermission.getReadPermission(SleepSessionRecord::class),
         HealthPermission.getReadPermission(HeartRateRecord::class),
         HealthPermission.getReadPermission(OxygenSaturationRecord::class),
+        // Spec 3.3 says read weight and hydration as well as write them, so a
+        // scale or another app publishing to Health Connect is picked up.
+        HealthPermission.getReadPermission(WeightRecord::class),
+        HealthPermission.getReadPermission(HydrationRecord::class),
     )
 
     /**
