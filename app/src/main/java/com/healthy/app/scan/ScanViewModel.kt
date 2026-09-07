@@ -85,12 +85,23 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
      * Stores what the user read off the can, so the app never asks again for
      * that barcode (spec 11.4) — including in flight mode.
      */
-    fun saveCaffeine(product: Product, mg: Int, volumeMl: Int, name: String) {
+    /**
+     * [mgPerReference] and [referenceMl] are what the label says — "32 mg per
+     * 100 ml" — and [containerMl] is how much the can holds. The product table
+     * stores the total for the container, because that is what a tap logs.
+     */
+    fun saveCaffeine(
+        product: Product,
+        mgPerReference: Int,
+        referenceMl: Int,
+        containerMl: Int,
+        name: String,
+    ) {
         viewModelScope.launch {
             val completed = product.copy(
                 name = name.ifBlank { product.name },
-                mg = mg,
-                volumeMl = volumeMl.takeIf { it > 0 } ?: product.volumeMl,
+                mg = OpenFoodFacts.totalMg(mgPerReference, referenceMl, containerMl),
+                volumeMl = containerMl.takeIf { it > 0 } ?: product.volumeMl,
                 source = Product.USER,
             )
             products.upsert(completed)
@@ -99,11 +110,18 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun saveNewProduct(barcode: String, name: String, mg: Int, volumeMl: Int) {
+    fun saveNewProduct(
+        barcode: String,
+        name: String,
+        mgPerReference: Int,
+        referenceMl: Int,
+        containerMl: Int,
+    ) {
         saveCaffeine(
             Product(barcode = barcode, kind = Product.KIND_DRINK, name = name, source = Product.USER),
-            mg = mg,
-            volumeMl = volumeMl,
+            mgPerReference = mgPerReference,
+            referenceMl = referenceMl,
+            containerMl = containerMl,
             name = name,
         )
     }

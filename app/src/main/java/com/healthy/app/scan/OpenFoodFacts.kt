@@ -125,6 +125,18 @@ object OpenFoodFacts {
     private const val MG_PER_GRAM = 1000.0
 
     /**
+     * Caffeine for a whole container, from what is printed on the label.
+     *
+     * A can states a figure against a reference volume — "32 mg per 100 ml" —
+     * and separately how much it holds. Those are two different numbers and
+     * conflating them is how a 330 ml cola becomes 32 mg instead of 106.
+     */
+    fun totalMg(mgPerReference: Int, referenceMl: Int, containerMl: Int): Int {
+        if (referenceMl <= 0 || containerMl <= 0) return mgPerReference
+        return Math.round(mgPerReference.toDouble() * containerMl / referenceMl).toInt()
+    }
+
+    /**
      * Pulls the number out of "250 ml", "1,5 L", "30 g" and similar. The field
      * is free text, so anything unrecognised gives null rather than a guess.
      */

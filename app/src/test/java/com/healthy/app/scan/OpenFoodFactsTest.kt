@@ -115,6 +115,29 @@ class OpenFoodFactsTest {
         assertNull(OpenFoodFacts.parseQuantityMl("family pack"))
     }
 
+    /**
+     * What a label actually states: a figure against a reference volume, and
+     * separately how much the container holds. Conflating the two turns a
+     * 330 ml cola into 32 mg instead of 106.
+     */
+    @Test
+    fun `a per-100ml label scales to the container`() {
+        assertEquals(106, OpenFoodFacts.totalMg(mgPerReference = 32, referenceMl = 100, containerMl = 330))
+        assertEquals(80, OpenFoodFacts.totalMg(32, 100, 250))
+        assertEquals(160, OpenFoodFacts.totalMg(32, 100, 500))
+    }
+
+    @Test
+    fun `a label giving the whole can is the reference equalling the container`() {
+        assertEquals(80, OpenFoodFacts.totalMg(mgPerReference = 80, referenceMl = 250, containerMl = 250))
+    }
+
+    @Test
+    fun `a nonsense reference volume does not divide by zero`() {
+        assertEquals(80, OpenFoodFacts.totalMg(80, 0, 250))
+        assertEquals(80, OpenFoodFacts.totalMg(80, 100, 0))
+    }
+
     /** Spec 11.5: the app reaches exactly one host. */
     @Test
     fun `the only host is world openfoodfacts org`() {

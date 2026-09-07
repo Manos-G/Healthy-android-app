@@ -90,7 +90,9 @@ fun ScanButton(
             productName = listOfNotNull(s.product.brand, s.product.name)
                 .joinToString(" ").trim().ifBlank { s.product.name },
             initialVolume = s.product.volumeMl,
-            onSave = { mg, ml, name -> vm.saveCaffeine(s.product, mg, ml, name) },
+            onSave = { mg, perMl, totalMl, name ->
+                vm.saveCaffeine(s.product, mg, perMl, totalMl, name)
+            },
             onDismiss = vm::dismiss,
         )
 
@@ -99,7 +101,9 @@ fun ScanButton(
             initialVolume = null,
             heading = s.reason?.let { "Could not reach Open Food Facts. Type it once instead." }
                 ?: "Not in Open Food Facts. Type it once and it is stored.",
-            onSave = { mg, ml, name -> vm.saveNewProduct(s.barcode, name, mg, ml) },
+            onSave = { mg, perMl, totalMl, name ->
+                vm.saveNewProduct(s.barcode, name, mg, perMl, totalMl)
+            },
             onDismiss = vm::dismiss,
         )
 
@@ -148,12 +152,25 @@ private fun CaffeineDialog(
     productName: String,
     initialVolume: Int?,
     heading: String? = null,
-    onSave: (Int, Int, String) -> Unit,
+    onSave: (Int, Int, Int, String) -> Unit,
     onDismiss: () -> Unit,
 ) {
     var name by remember { mutableStateOf(productName) }
     var mg by remember { mutableStateOf("") }
-    var ml by remember { mutableStateOf(initialVolume?.toString() ?: "") }
+    // Labels almost always state a figure per 100 ml, so that is the default;
+    // a can that gives the whole amount is handled by setting this to the
+    // container size.
+    var perMl by remember { mutableStateOf("100") }
+    var totalMl by remember { mutableStateOf(initialVolume?.toString() ?: "") }
+
+    val mgValue = mg.toIntOrNull()
+    val perValue = perMl.toIntOrNull()
+    val totalValue = totalMl.toIntOrNull()
+    val computed = if (mgValue != null && perValue != null && perValue > 0 && totalValue != null && totalValue > 0) {
+        com.healthy.app.scan.OpenFoodFacts.totalMg(mgValue, perValue, totalValue)
+    } else {
+        null
+    }
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
@@ -171,7 +188,7 @@ private fun CaffeineDialog(
                     heading
                         ?: "Found in Open Food Facts, but the entry carries no caffeine " +
                         "figure — most colas do not, while most energy drinks do. " +
-                        "Read the number off the can. This barcode will not ask again.",
+                        "Copy what the label says. This barcode will not ask again.",
                     color = HealthyColors.Muted,
                     fontSize = 12.sp,
                     modifier = Modifier.padding(top = 6.dp),
@@ -190,37 +207,27 @@ private fun CaffeineDialog(
                     Modifier.fillMaxWidth().padding(top = 10.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    OutlinedTextField(
-                        value = mg,
-                        onValueChange = { v -> mg = v.filter { it.isDigit() } },
-                        label = { Text("Caffeine mg", fontSize = 11.sp) },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f),
-                        colors = scanFieldColours(),
-                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
-                            keyboardType = KeyboardType.Number,
-                        ),
-                    )
-                    OutlinedTextField(
-                        value = ml,
-                        onValueChange = { v -> ml = v.filter { it.isDigit() } },
-                        label = { Text("Volume ml", fontSize = 11.sp) },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f),
-                        colors = scanFieldColours(),
-                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
-                            keyboardType = KeyboardType.Number,
-                        ),
-                    )
+                    NumberBox("Caffeine mg", mg, Modifier.weight(1f)) { mg = it }
+                    NumberBox("per ml", perMl, Modifier.weight(1f)) { perMl = it }
+                    NumberBox("Can holds ml", totalMl, Modifier.weight(1f)) { totalMl = it }
                 }
+                Text(
+                    computed?.let { "That is $it mg for the whole ${totalValue} ml." }
+                        ?: "Example: a label reading 32 mg per 100 ml on a 330 ml can is 106 mg.",
+                    color = if (computed != null) HealthyColors.Sleep else HealthyColors.Muted,
+                    fontSize = 12.sp,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
                 Row(
                     Modifier.fillMaxWidth().padding(top = 10.dp),
                     horizontalArrangement = Arrangement.End,
                 ) {
                     TextButton(onClick = onDismiss) { Text("Cancel", color = HealthyColors.Muted) }
                     TextButton(
-                        onClick = { onSave(mg.toIntOrNull() ?: 0, ml.toIntOrNull() ?: 0, name) },
-                        enabled = mg.toIntOrNull() != null && (productName.isNotBlank() || name.isNotBlank()),
+                        onClick = {
+                            onSave(mgValue ?: 0, perValue ?: 100, totalValue ?: 0, name)
+                        },
+                        enabled = computed != null && (productName.isNotBlank() || name.isNotBlank()),
                     ) {
                         Text("Save", color = HealthyColors.Sleep)
                     }
@@ -228,6 +235,26 @@ private fun CaffeineDialog(
             }
         }
     }
+}
+
+@Composable
+private fun NumberBox(
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier,
+    onChange: (String) -> Unit,
+) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = { v -> onChange(v.filter { it.isDigit() }) },
+        label = { Text(label, fontSize = 10.sp) },
+        singleLine = true,
+        modifier = modifier,
+        colors = scanFieldColours(),
+        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+            keyboardType = KeyboardType.Number,
+        ),
+    )
 }
 
 @Composable
