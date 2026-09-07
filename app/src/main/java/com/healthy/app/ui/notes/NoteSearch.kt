@@ -1,14 +1,19 @@
 package com.healthy.app.ui.notes
 
 /**
- * Turns what the user types into an FTS MATCH query (spec 15.4).
+ * Turns what the user types into an FTS4 MATCH query (spec 15.4).
  *
- * Two things to get right. A trailing wildcard makes the search run as they
- * type, so "thro" already finds "throat". And every term is stripped to
- * letters and digits and then quoted, so an apostrophe, a hyphen or a stray
- * quote is searched for rather than parsed: FTS treats several punctuation
- * marks as operators, and a note about a "sore throat - day 2" must not throw
- * a syntax error mid-keystroke.
+ * The search runs as the user types, so each term needs the prefix operator:
+ * "thro" has to find "throat". In FTS4 that operator only applies to a bare
+ * token — `thro*`. Quoting the token makes it a phrase, and `"thro"*` matches
+ * nothing at all, which is a mistake no amount of string assertion catches
+ * because the string looks perfectly reasonable.
+ *
+ * Safety therefore cannot come from quoting. It comes from the term itself:
+ * every character that is not a letter or digit is stripped, which removes
+ * every FTS operator character, and the result is lowercased so a typed "OR"
+ * becomes the ordinary token `or` rather than the boolean operator, which FTS4
+ * only recognises in upper case.
  */
 object NoteSearch {
 
@@ -18,10 +23,10 @@ object NoteSearch {
     fun toMatchQuery(raw: String): String {
         val terms = raw.trim()
             .split(Regex("\\s+"))
-            .map { term -> term.filter { it.isLetterOrDigit() } }
+            .map { term -> term.filter { it.isLetterOrDigit() }.lowercase() }
             .filter { it.isNotEmpty() }
 
         if (terms.isEmpty()) return MATCHES_NOTHING
-        return terms.joinToString(" ") { "\"$it\"*" }
+        return terms.joinToString(" ") { "$it*" }
     }
 }

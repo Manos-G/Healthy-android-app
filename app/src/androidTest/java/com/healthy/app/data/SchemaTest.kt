@@ -7,6 +7,7 @@ import com.healthy.app.core.HealthyDay
 import com.healthy.app.data.entity.Drink
 import com.healthy.app.data.entity.Night
 import com.healthy.app.data.entity.Note
+import com.healthy.app.ui.notes.NoteSearch
 import com.healthy.app.data.entity.Recipe
 import com.healthy.app.data.entity.RecipeItem
 import com.healthy.app.data.entity.StageBlock
@@ -204,9 +205,15 @@ class SchemaTest {
     fun aPrefixMatchesBeforeTheWordIsFinished() = runBlocking {
         db.noteDao().insert(Note(date = "2026-03-16", text = "sore throat again", createdAt = 1L))
 
-        assertEquals(1, db.noteDao().search("\"thro\"*").first().size)
-        assertEquals(1, db.noteDao().search("\"sore\"* \"thro\"*").first().size)
-        assertTrue(db.noteDao().search("\"zzz\"*").first().isEmpty())
+        // Built the way the notes screen builds it, so this test fails if the
+        // query syntax ever stops being valid FTS4.
+        assertEquals(1, db.noteDao().search(NoteSearch.toMatchQuery("thro")).first().size)
+        assertEquals(1, db.noteDao().search(NoteSearch.toMatchQuery("sore thro")).first().size)
+        assertTrue(db.noteDao().search(NoteSearch.toMatchQuery("zzz")).first().isEmpty())
+        // A term that is only punctuation must not throw, and must find nothing.
+        assertTrue(db.noteDao().search(NoteSearch.toMatchQuery("!!!")).first().isEmpty())
+        // A typed operator is searched for as a word rather than parsed.
+        assertTrue(db.noteDao().search(NoteSearch.toMatchQuery("sore OR zzz")).first().isEmpty())
     }
 
     @Test
