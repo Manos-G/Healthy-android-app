@@ -30,4 +30,14 @@ data class Drink(
 
     /** Fluid volume in millilitres. Zero for a solid, such as dark chocolate. */
     @ColumnInfo(name = "volumeMl") val volumeMl: Int = 0,
+
+    /**
+     * Alcohol units in this drink (spec 9.4), so the morning screen never asks
+     * the user to type a total the app already knows.
+     *
+     * Stored on the row rather than derived from settings at read time. A unit
+     * means different things in different countries and the user may correct
+     * the setting later, but what they drank last Tuesday does not change.
+     */
+    @ColumnInfo(name = "alcoholUnits") val alcoholUnits: Double = 0.0,
 )

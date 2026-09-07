@@ -138,10 +138,14 @@ class MorningViewModel(app: Application) : AndroidViewModel(app) {
         val from = HealthyDay.startOf(date)
         val to = HealthyDay.endOf(date)
         val dayDrinks = drinks.between(from, to)
+        // Spec 9.4: a beer or a wine already recorded its units, so the form
+        // shows the total instead of asking for it again.
+        val loggedAlcohol = dayDrinks.sumOf { it.alcoholUnits }
 
         _form.value = if (night == null) {
             MorningForm(
                 date = date,
+                alcoholUnits = if (loggedAlcohol > 0) trimNumber(loggedAlcohol) else "",
                 caffeineMg = dayDrinks.sumOf { it.mg },
                 caffeineCount = dayDrinks.size,
                 existing = false,
@@ -155,7 +159,8 @@ class MorningViewModel(app: Application) : AndroidViewModel(app) {
                 restingHr = night.restingHr?.toString().orEmpty(),
                 spo2 = night.spo2?.let { trimNumber(it) }.orEmpty(),
                 alertness = night.alertness,
-                alcoholUnits = night.alcoholUnits?.let { trimNumber(it) }.orEmpty(),
+                alcoholUnits = night.alcoholUnits?.let { trimNumber(it) }
+                    ?: loggedAlcohol.takeIf { it > 0 }?.let { trimNumber(it) }.orEmpty(),
                 lastMeal = night.lastMeal,
                 exercise = night.exercise,
                 roomTempC = night.roomTempC?.let { trimNumber(it) }.orEmpty(),

@@ -5,7 +5,10 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.healthy.app.core.Caffeine
 import com.healthy.app.core.CatalogDrink
+import com.healthy.app.core.AlcoholKind
 import com.healthy.app.core.DrinkCatalog
+import com.healthy.app.core.FluidCatalog
+import com.healthy.app.core.FluidDrink
 import com.healthy.app.core.HealthyDay
 import com.healthy.app.data.HealthyDatabase
 import com.healthy.app.data.HealthySettings
@@ -17,6 +20,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -43,6 +47,9 @@ data class TodayState(
     val catalog: List<CatalogDrink> = DrinkCatalog.BUILT_IN,
     val totalMg: Int = 0,
     val totalMl: Int = 0,
+    val fluidTargetMl: Int = HealthySettings.DEFAULT_FLUID_TARGET_ML,
+    val alcoholUnits: Double = 0.0,
+    val fluidCatalog: List<FluidDrink> = FluidCatalog.BUILT_IN,
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -52,6 +59,7 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
     private val drinks = db.drinkDao()
     private val customDrinks = db.customDrinkDao()
     private val settingsStore = SettingsStore(app)
+    private val writer = com.healthy.app.health.HealthWriter(app)
 
     /**
      * Ticks so the hero numeral and the "now" line keep up with the clock.
@@ -156,6 +164,8 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
             catalog = DrinkCatalog.BUILT_IN + custom,
             totalMg = today.sumOf { it.mg },
             totalMl = today.sumOf { it.volumeMl },
+            fluidTargetMl = settings.fluidTargetMl,
+            alcoholUnits = today.sumOf { it.alcoholUnits },
         )
     }
 
@@ -173,17 +183,48 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
         return candidate
     }
 
+    /**
+     * Logs a drink with no caffeine (spec 9.2). A beer or a wine also adds to
+     * the day's alcohol units, which the morning screen then reads rather than
+     * asking the user to type again (spec 9.4).
+     */
+    fun logFluid(drink: FluidDrink) {
+        viewModelScope.launch {
+            val settings = settingsStore.settings.first()
+            val units = when (drink.alcoholUnitsKey) {
+                AlcoholKind.None -> 0.0
+                AlcoholKind.Beer -> settings.unitsPerBeer
+                AlcoholKind.Wine -> settings.unitsPerWine
+            }
+            val now = System.currentTimeMillis()
+            val row = Drink(
+                name = drink.name,
+                mg = 0,
+                timestamp = now,
+                volumeMl = drink.volumeMl,
+                alcoholUnits = units,
+            )
+            val id = drinks.insert(row)
+            _lastLogged.value = row.copy(id = id)
+            writer.writeHydration(drink.volumeMl, now, now)
+            tick.value = System.currentTimeMillis()
+        }
+    }
+
     /** One tap logs the caffeine and the fluid together (spec 9.1). */
     fun log(drink: CatalogDrink) {
         viewModelScope.launch {
+            val now = System.currentTimeMillis()
             val row = Drink(
                 name = drink.name,
                 mg = drink.mg,
-                timestamp = System.currentTimeMillis(),
+                timestamp = now,
                 volumeMl = drink.volumeMl,
             )
             val id = drinks.insert(row)
             _lastLogged.value = row.copy(id = id)
+            // Mirror the fluid into Health Connect so other apps see it too.
+            if (drink.volumeMl > 0) writer.writeHydration(drink.volumeMl, now, now)
             tick.value = System.currentTimeMillis()
         }
     }

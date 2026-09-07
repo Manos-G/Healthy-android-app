@@ -82,6 +82,7 @@ fun TodayScreen(
                 EnergyPromptCard(night) { rating -> vm.rateEnergy(night.date, rating) }
             }
         }
+        item { FluidCard(state, vm::logFluid) }
         item { CatalogCard(state.catalog, vm::log) }
         item { EntriesCard(state.entries, vm::delete) }
     }
@@ -205,6 +206,88 @@ private fun Verdict(isClear: Boolean) {
             fontWeight = FontWeight.Medium,
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
         )
+    }
+}
+
+/**
+ * Fluid for the day (spec 9.3).
+ *
+ * A bar that fills, and nothing else: no notification when below target and no
+ * streak. Caffeinated drinks already counted themselves when they were logged
+ * (spec 9.1), so these buttons are only for the ones with no caffeine.
+ */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun FluidCard(state: TodayState, onLog: (com.healthy.app.core.FluidDrink) -> Unit) {
+    SectionCard {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.Bottom,
+        ) {
+            Text("Fluid", color = HealthyColors.Paper, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            Text(
+                "${state.totalMl} of ${state.fluidTargetMl} ml",
+                color = HealthyColors.Muted,
+                fontSize = 13.sp,
+            )
+        }
+
+        val fraction = if (state.fluidTargetMl > 0) {
+            (state.totalMl.toFloat() / state.fluidTargetMl).coerceIn(0f, 1f)
+        } else {
+            0f
+        }
+        androidx.compose.material3.LinearProgressIndicator(
+            progress = { fraction },
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp).height(8.dp),
+            color = HealthyColors.Sleep,
+            trackColor = HealthyColors.Raised2,
+            strokeCap = androidx.compose.ui.graphics.StrokeCap.Round,
+            gapSize = 0.dp,
+            drawStopIndicator = {},
+        )
+
+        if (state.alcoholUnits > 0) {
+            Text(
+                "Alcohol today: ${"%.1f".format(state.alcoholUnits)} units. " +
+                    "The morning screen reads this; you do not type it again.",
+                color = HealthyColors.Caffeine,
+                fontSize = 11.sp,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+        }
+
+        androidx.compose.foundation.layout.FlowRow(
+            modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            state.fluidCatalog.forEach { drink ->
+                OutlinedButton(
+                    onClick = { onLog(drink) },
+                    shape = RoundedCornerShape(10.dp),
+                    colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(
+                        containerColor = HealthyColors.Raised2,
+                        contentColor = HealthyColors.Paper,
+                    ),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, HealthyColors.Rule),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                        horizontal = 12.dp,
+                        vertical = 8.dp,
+                    ),
+                ) {
+                    Column {
+                        Text(drink.name, fontSize = 13.sp)
+                        Text(
+                            "${drink.volumeMl} ml",
+                            fontSize = 11.sp,
+                            color = HealthyColors.Sleep,
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 

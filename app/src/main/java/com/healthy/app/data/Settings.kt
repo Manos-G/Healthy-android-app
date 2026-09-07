@@ -23,9 +23,17 @@ data class HealthySettings(
     val targetBedtime: String = DEFAULT_BEDTIME,
     val halfLifeHours: Double = Caffeine.DEFAULT_HALF_LIFE_HOURS,
     val bedtimeLimitMg: Int = Caffeine.DEFAULT_BEDTIME_LIMIT_MG,
+    /** Millilitres. No notification and no streak when below it (spec 9.3). */
+    val fluidTargetMl: Int = DEFAULT_FLUID_TARGET_ML,
+    /** A unit means different things by country, so both are settings (spec 9.4). */
+    val unitsPerBeer: Double = DEFAULT_UNITS_PER_BEER,
+    val unitsPerWine: Double = DEFAULT_UNITS_PER_WINE,
 ) {
     companion object {
         const val DEFAULT_BEDTIME = "23:30"
+        const val DEFAULT_FLUID_TARGET_ML = 2000
+        const val DEFAULT_UNITS_PER_BEER = 1.7
+        const val DEFAULT_UNITS_PER_WINE = 1.6
     }
 }
 
@@ -38,6 +46,9 @@ class SettingsStore(private val context: Context) {
             targetBedtime = prefs[KEY_BEDTIME] ?: HealthySettings.DEFAULT_BEDTIME,
             halfLifeHours = prefs[KEY_HALF_LIFE] ?: Caffeine.DEFAULT_HALF_LIFE_HOURS,
             bedtimeLimitMg = prefs[KEY_LIMIT] ?: Caffeine.DEFAULT_BEDTIME_LIMIT_MG,
+            fluidTargetMl = prefs[KEY_FLUID_TARGET] ?: HealthySettings.DEFAULT_FLUID_TARGET_ML,
+            unitsPerBeer = prefs[KEY_UNITS_BEER] ?: HealthySettings.DEFAULT_UNITS_PER_BEER,
+            unitsPerWine = prefs[KEY_UNITS_WINE] ?: HealthySettings.DEFAULT_UNITS_PER_WINE,
         )
     }
 
@@ -47,6 +58,8 @@ class SettingsStore(private val context: Context) {
 
     suspend fun setBedtimeLimitMg(value: Int) = edit { it[KEY_LIMIT] = value }
 
+    suspend fun setFluidTargetMl(value: Int) = edit { it[KEY_FLUID_TARGET] = value }
+
     private suspend fun edit(block: (androidx.datastore.preferences.core.MutablePreferences) -> Unit) {
         context.dataStore.edit(block)
     }
@@ -55,5 +68,8 @@ class SettingsStore(private val context: Context) {
         val KEY_BEDTIME: Preferences.Key<String> = stringPreferencesKey("target_bedtime")
         val KEY_HALF_LIFE: Preferences.Key<Double> = doublePreferencesKey("half_life_hours")
         val KEY_LIMIT: Preferences.Key<Int> = intPreferencesKey("bedtime_limit_mg")
+        val KEY_FLUID_TARGET: Preferences.Key<Int> = intPreferencesKey("fluid_target_ml")
+        val KEY_UNITS_BEER: Preferences.Key<Double> = doublePreferencesKey("units_per_beer")
+        val KEY_UNITS_WINE: Preferences.Key<Double> = doublePreferencesKey("units_per_wine")
     }
 }

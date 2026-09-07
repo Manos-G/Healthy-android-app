@@ -2,10 +2,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <!--
-      Health Connect reads (spec 3.2). Weight and hydration writes arrive in
-      step 7 with the screens that use them; menstruation only if the user
-      turns that toggle on (spec 10.2). Nothing is declared before the step
-      that uses it.
+      Health Connect reads (spec 3.2) and the two writes (spec 3.3), which
+      arrive here with step 7's weight and fluid screens. Menstruation is
+      declared only if the user turns that toggle on (spec 10.2). Nothing is
+      declared before the step that uses it.
 
       INTERNET arrives in step 8 with the barcode scanner, bound to
       world.openfoodfacts.org by a network security configuration (spec 11.5).
@@ -13,6 +13,8 @@
     <uses-permission android:name="android.permission.health.READ_SLEEP" />
     <uses-permission android:name="android.permission.health.READ_HEART_RATE" />
     <uses-permission android:name="android.permission.health.READ_OXYGEN_SATURATION" />
+    <uses-permission android:name="android.permission.health.WRITE_WEIGHT" />
+    <uses-permission android:name="android.permission.health.WRITE_HYDRATION" />
 
     <!-- Lets the app check whether a Health Connect provider is installed. -->
     <queries>

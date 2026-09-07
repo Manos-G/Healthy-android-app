@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.InsertChartOutlined
+import androidx.compose.material.icons.filled.MonitorWeight
 import androidx.compose.material.icons.filled.LocalCafe
 import androidx.compose.material.icons.filled.WbSunny
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -32,6 +33,7 @@ import com.healthy.app.ui.morning.MorningScreen
 import com.healthy.app.ui.theme.HealthyColors
 import com.healthy.app.ui.today.TodayScreen
 import com.healthy.app.ui.trends.TrendsScreen
+import com.healthy.app.ui.weight.WeightScreen
 
 /**
  * The tab shell. Trends and Data join it at steps 6 and 17.
@@ -44,6 +46,7 @@ import com.healthy.app.ui.trends.TrendsScreen
 private enum class Tab(val label: String, val icon: ImageVector) {
     Today("Today", Icons.Filled.LocalCafe),
     Morning("Morning", Icons.Filled.WbSunny),
+    Weight("Weight", Icons.Filled.MonitorWeight),
     Trends("Trends", Icons.Filled.InsertChartOutlined),
     Data("Data", Icons.Filled.FolderOpen),
 }
@@ -64,6 +67,7 @@ fun HealthyApp() {
                         when (tab) {
                             Tab.Today -> "Healthy"
                             Tab.Morning -> "Last night"
+                            Tab.Weight -> "Weight"
                             Tab.Trends -> "Trends"
                             Tab.Data -> "Your data"
                         },
@@ -103,6 +107,9 @@ fun HealthyApp() {
                 modifier = Modifier.fillMaxSize().padding(padding),
             )
             Tab.Morning -> MorningScreen(
+                modifier = Modifier.fillMaxSize().padding(padding),
+            )
+            Tab.Weight -> WeightScreen(
                 modifier = Modifier.fillMaxSize().padding(padding),
             )
             Tab.Trends -> TrendsScreen(

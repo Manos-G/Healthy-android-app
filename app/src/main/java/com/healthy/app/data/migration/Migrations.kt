@@ -48,5 +48,16 @@ object Migrations {
         }
     }
 
-    val ALL: Array<Migration> = arrayOf(MIGRATION_1_2)
+    /**
+     * Step 7 gives a drink its alcohol units (spec 9.4). Additive with a
+     * default, so every existing row reads as a drink with no alcohol, which
+     * is what those rows were.
+     */
+    val MIGRATION_2_3 = object : Migration(2, 3) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE `drink` ADD COLUMN `alcoholUnits` REAL NOT NULL DEFAULT 0.0")
+        }
+    }
+
+    val ALL: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3)
 }

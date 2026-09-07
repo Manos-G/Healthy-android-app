@@ -57,7 +57,7 @@ abstract class HealthyDatabase : RoomDatabase() {
     abstract fun noteDao(): NoteDao
 
     companion object {
-        const val VERSION = 2
+        const val VERSION = 3
         const val NAME = "healthy.db"
 
         @Volatile

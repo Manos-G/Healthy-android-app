@@ -77,7 +77,11 @@ fun HealthConnectCard(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     Button(
-                        onClick = { permissionLauncher.launch(HealthConnect.READ_PERMISSIONS) },
+                        onClick = {
+                            permissionLauncher.launch(
+                                HealthConnect.READ_PERMISSIONS + HealthConnect.WRITE_PERMISSIONS
+                            )
+                        },
                         shape = RoundedCornerShape(10.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = HealthyColors.Sleep,

@@ -60,6 +60,29 @@ class MigrationTest {
         db.close()
     }
 
+    /** Step 7 adds drink.alcoholUnits. Existing drinks must read as zero. */
+    @Test
+    @Throws(IOException::class)
+    fun migration2To3AddsAlcoholUnitsWithoutLosingDrinks() {
+        helper.createDatabase(TEST_DB, 1).apply {
+            execSQL(
+                "INSERT INTO drink (name, mg, timestamp, volumeMl) " +
+                    "VALUES ('Freddo espresso', 125, 1772000000000, 200)"
+            )
+            close()
+        }
+        helper.runMigrationsAndValidate(TEST_DB, 2, true, Migrations.MIGRATION_1_2).close()
+        val db = helper.runMigrationsAndValidate(TEST_DB, 3, true, Migrations.MIGRATION_2_3)
+
+        db.query("SELECT name, mg, alcoholUnits FROM drink").use { c ->
+            assertTrue("the drink must survive both migrations", c.moveToFirst())
+            assertEquals("Freddo espresso", c.getString(0))
+            assertEquals(125, c.getInt(1))
+            assertEquals("a coffee has no alcohol", 0.0, c.getDouble(2), 0.0001)
+        }
+        db.close()
+    }
+
     /**
      * Opens the current schema through the real builder and runs every
      * migration in [Migrations.ALL].
