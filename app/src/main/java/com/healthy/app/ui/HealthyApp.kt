@@ -3,6 +3,7 @@ package com.healthy.app.ui
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.LocalCafe
 import androidx.compose.material.icons.filled.WbSunny
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -25,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
+import com.healthy.app.ui.data.DataScreen
 import com.healthy.app.ui.morning.MorningScreen
 import com.healthy.app.ui.theme.HealthyColors
 import com.healthy.app.ui.today.TodayScreen
@@ -40,6 +42,7 @@ import com.healthy.app.ui.today.TodayScreen
 private enum class Tab(val label: String, val icon: ImageVector) {
     Today("Today", Icons.Filled.LocalCafe),
     Morning("Morning", Icons.Filled.WbSunny),
+    Data("Data", Icons.Filled.FolderOpen),
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -58,6 +61,7 @@ fun HealthyApp() {
                         when (tab) {
                             Tab.Today -> "Healthy"
                             Tab.Morning -> "Last night"
+                            Tab.Data -> "Your data"
                         },
                         fontSize = 16.sp,
                         fontWeight = FontWeight.SemiBold,
@@ -95,6 +99,9 @@ fun HealthyApp() {
                 modifier = Modifier.fillMaxSize().padding(padding),
             )
             Tab.Morning -> MorningScreen(
+                modifier = Modifier.fillMaxSize().padding(padding),
+            )
+            Tab.Data -> DataScreen(
                 modifier = Modifier.fillMaxSize().padding(padding),
             )
         }
