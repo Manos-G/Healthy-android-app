@@ -16,6 +16,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -49,14 +50,18 @@ fun WeightWheel(
 
     val listState = rememberLazyListState(initialFirstVisibleItemIndex = startIndex)
     val fling = rememberSnapFlingBehavior(lazyListState = listState)
+    val rowPx = with(LocalDensity.current) { ROW_HEIGHT.dp.toPx() }
 
-    // The centred row is the selection, so the reading follows the scroll
-    // rather than needing a separate confirm step.
-    val selected by remember {
+    // The list carries two rows of top padding, so the first visible item is
+    // already the centred one. Adding the centre offset again would read the
+    // value two rows below the lines, which is what it did at first.
+    val selectedIndex by remember {
         derivedStateOf {
-            values.getOrNull(listState.firstVisibleItemIndex + CENTRE_OFFSET)
+            val nudge = if (listState.firstVisibleItemScrollOffset > rowPx / 2) 1 else 0
+            (listState.firstVisibleItemIndex + nudge).coerceIn(0, values.lastIndex)
         }
     }
+    val selected by remember { derivedStateOf { values.getOrNull(selectedIndex) } }
 
     LaunchedEffect(Unit) {
         snapshotFlow { selected }.collect { value -> value?.let(onValueChange) }
@@ -71,7 +76,7 @@ fun WeightWheel(
         ) {
             items(values.size) { index ->
                 val value = values[index]
-                val isSelected = index == listState.firstVisibleItemIndex + CENTRE_OFFSET
+                val isSelected = index == selectedIndex
                 Text(
                     text = "%.1f".format(value),
                     color = if (isSelected) HealthyColors.Paper else HealthyColors.Muted,

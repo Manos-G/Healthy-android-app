@@ -72,6 +72,10 @@ class SettingsStore(private val context: Context) {
 
     suspend fun setFluidTargetMl(value: Int) = edit { it[KEY_FLUID_TARGET] = value }
 
+    suspend fun setUnitsPerBeer(value: Double) = edit { it[KEY_UNITS_BEER] = value }
+
+    suspend fun setUnitsPerWine(value: Double) = edit { it[KEY_UNITS_WINE] = value }
+
     /** Clearing the goal removes its values rather than leaving them stale. */
     suspend fun setNoGoal() = edit {
         it[KEY_GOAL_MODE] = HealthySettings.GOAL_NONE

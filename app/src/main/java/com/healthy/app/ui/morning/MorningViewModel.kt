@@ -62,6 +62,14 @@ data class MorningForm(
     val syncedAt: Long? = null,
     val syncMessage: String? = null,
     val stageSummary: String? = null,
+    /** Set after a sync, for the chart in spec 18.4. */
+    val hypnogram: com.healthy.app.analysis.Hypnogram.Result? = null,
+    val stageBlocks: List<com.healthy.app.data.entity.StageBlock> = emptyList(),
+    val sleepStartMillis: Long = 0,
+    val sleepEndMillis: Long = 0,
+    /** Both cycle lengths, labelled by source (spec 18.5). */
+    val watchCycleMinutes: Int? = null,
+    val heartCycleMinutes: Int? = null,
 ) {
     /**
      * Sleep duration in minutes, handling a night that crosses midnight and one
@@ -234,6 +242,11 @@ class MorningViewModel(app: Application) : AndroidViewModel(app) {
 
                 is HealthReader.Result.Found -> {
                     pendingStageBlocks = result.data.stageBlocks
+                    val hypnogram = com.healthy.app.analysis.Hypnogram.analyse(
+                        samples = result.data.heartRateSamples,
+                        sleepStart = result.data.sleepStart,
+                        sleepEnd = result.data.sleepEnd,
+                    )
                     val f = _form.value
                     val edited = f.editedFields
                     val t = result.data.totals
@@ -249,6 +262,14 @@ class MorningViewModel(app: Application) : AndroidViewModel(app) {
                         else result.data.restingHr?.toString().orEmpty(),
                         spo2 = if (SyncedField.SPO2 in edited) f.spo2
                         else result.data.spo2?.let { "%.1f".format(it) }.orEmpty(),
+                        hypnogram = hypnogram,
+                        stageBlocks = result.data.stageBlocks,
+                        sleepStartMillis = result.data.sleepStart,
+                        sleepEndMillis = result.data.sleepEnd,
+                        watchCycleMinutes = SleepAnalysis
+                            .cycleLengthFromDeepBlocks(result.data.stageBlocks),
+                        heartCycleMinutes = (hypnogram as? com.healthy.app.analysis.Hypnogram.Result.Found)
+                            ?.cycleLengthMinutes,
                         syncedAt = System.currentTimeMillis(),
                         stageSummary = describeStages(
                             t,

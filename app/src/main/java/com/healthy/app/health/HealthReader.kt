@@ -7,6 +7,7 @@ import androidx.health.connect.client.records.SleepSessionRecord
 import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
 import com.healthy.app.core.HealthyDay
+import com.healthy.app.analysis.Hypnogram
 import com.healthy.app.data.entity.StageBlock
 import java.time.Instant
 import java.time.ZoneId
@@ -40,6 +41,8 @@ class HealthReader(private val context: Context) {
          */
         val source: String,
         val competingSessions: Int,
+        /** Individual samples, which spec 18.3 requires over the 30-minute groups. */
+        val heartRateSamples: List<Hypnogram.Sample> = emptyList(),
     )
 
     sealed interface Result {
@@ -126,6 +129,11 @@ class HealthReader(private val context: Context) {
                     heartRateSampleCount = heartRecords.sumOf { it.samples.size },
                     source = session.metadata.dataOrigin.packageName,
                     competingSessions = forThisNight.size - 1,
+                    heartRateSamples = heartRecords.flatMap { record ->
+                        record.samples.map {
+                            Hypnogram.Sample(it.time.toEpochMilli(), it.beatsPerMinute.toInt())
+                        }
+                    }.sortedBy { it.timeMillis },
                 )
             )
         }.getOrElse { Result.Failed(it.message ?: it::class.simpleName ?: "unknown error") }

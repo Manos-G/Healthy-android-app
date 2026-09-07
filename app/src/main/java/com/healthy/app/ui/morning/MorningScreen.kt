@@ -63,6 +63,9 @@ fun MorningScreen(
             item { SyncCard(form, vm) }
         }
         item { SleepCard(form, vm) }
+        if (form.hypnogram != null) {
+            item { HypnogramCard(form) }
+        }
         item { AlertnessCard(form, vm) }
         item { ContextCard(form, vm) }
         item { SaveCard(form, vm) }
@@ -251,6 +254,60 @@ private fun SleepCard(form: MorningForm, vm: MorningViewModel) {
             color = HealthyColors.Muted,
             fontSize = 11.sp,
             modifier = Modifier.padding(top = 8.dp),
+        )
+    }
+}
+
+/**
+ * The hypnogram (spec 18.4), and both cycle lengths side by side (spec 18.5).
+ *
+ * Two numbers that agree give confidence; two that disagree show the watch is
+ * guessing. Both results are useful, so neither is hidden.
+ */
+@Composable
+private fun HypnogramCard(form: MorningForm) {
+    SectionCard {
+        CardTitle(
+            "The shape of the night",
+            "Measured from heart rate, not from the watch's stages.",
+        )
+        com.healthy.app.ui.hypnogram.HypnogramChart(
+            result = form.hypnogram!!,
+            stageBlocks = form.stageBlocks,
+            sleepStart = form.sleepStartMillis,
+            sleepEnd = form.sleepEndMillis,
+            modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text("Cycle, from the watch", color = HealthyColors.Muted, fontSize = 11.sp)
+                Text(
+                    form.watchCycleMinutes?.let { "$it min" } ?: "too few blocks",
+                    color = HealthyColors.Paper,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                )
+            }
+            Column(Modifier.weight(1f)) {
+                Text("Cycle, from heart rate", color = HealthyColors.Muted, fontSize = 11.sp)
+                Text(
+                    form.heartCycleMinutes?.let { "$it min" } ?: "—",
+                    color = HealthyColors.Sleep,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                )
+            }
+        }
+        Text(
+            "This chart shows heart rate, not brain activity. Only an EEG measures " +
+                "sleep stages. It finds the rhythm of the night from a real " +
+                "measurement; it does not name the stages.",
+            color = HealthyColors.Muted,
+            fontSize = 11.sp,
+            modifier = Modifier.padding(top = 10.dp),
         )
     }
 }

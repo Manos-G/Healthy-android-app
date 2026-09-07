@@ -36,12 +36,17 @@ fun DataScreen(
 ) {
     var showSources by remember { mutableStateOf(false) }
     var showNotes by remember { mutableStateOf(false) }
+    var showSettings by remember { mutableStateOf(false) }
     if (showSources) {
         com.healthy.app.ui.sources.SourcesScreen(onClose = { showSources = false })
         return
     }
     if (showNotes) {
         com.healthy.app.ui.notes.NotesScreen(onClose = { showNotes = false })
+        return
+    }
+    if (showSettings) {
+        com.healthy.app.ui.settings.SettingsScreen(onClose = { showSettings = false })
         return
     }
     val status by vm.status.collectAsStateWithLifecycle()
@@ -200,6 +205,35 @@ fun DataScreen(
         item {
             SectionCard {
                 Text(
+                    "Settings",
+                    color = HealthyColors.Paper,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    "Target bedtime, caffeine half-life and limit, fluid target, and what a unit of alcohol means where you live.",
+                    color = HealthyColors.Muted,
+                    fontSize = 12.sp,
+                    modifier = Modifier.padding(top = 4.dp, bottom = 10.dp),
+                )
+                OutlinedButton(
+                    onClick = { showSettings = true },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp),
+                    border = BorderStroke(1.dp, HealthyColors.Rule),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        containerColor = HealthyColors.Raised2,
+                        contentColor = HealthyColors.Paper,
+                    ),
+                ) {
+                    Text("Open settings", fontSize = 14.sp)
+                }
+            }
+        }
+
+        item {
+            SectionCard {
+                Text(
                     "Notes",
                     color = HealthyColors.Paper,
                     fontSize = 15.sp,
@@ -264,7 +298,7 @@ fun DataScreen(
                     fontWeight = FontWeight.SemiBold,
                 )
                 Text(
-                    "Import, QR share and the settings for bedtime, half-life and the bedtime limit arrive with step 17. Export came early so there is a way back from a lost database.",
+                    "QR share arrives with the barcode scanner in step 8. Everything else in the data section is here.",
                     color = HealthyColors.Muted,
                     fontSize = 12.sp,
                     modifier = Modifier.padding(top = 4.dp),
