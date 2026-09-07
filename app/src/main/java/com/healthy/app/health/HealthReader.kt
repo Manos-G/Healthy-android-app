@@ -172,6 +172,35 @@ class HealthReader(private val context: Context) {
         }.getOrElse { Result.Failed(it.message ?: it::class.simpleName ?: "unknown error") }
     }
 
+    data class RecentSession(val date: String, val endMillis: Long, val minutes: Int)
+
+    /**
+     * The most recently finished sleep session, which is what the notification
+     * job compares against (spec 14.2).
+     */
+    suspend fun mostRecentSession(zone: ZoneId = ZoneId.systemDefault()): RecentSession? {
+        val client = HealthConnect.client(context) ?: return null
+        return runCatching {
+            client.readRecords(
+                ReadRecordsRequest(
+                    SleepSessionRecord::class,
+                    timeRangeFilter = TimeRangeFilter.between(
+                        Instant.now().minusSeconds(3 * 24 * 60 * 60),
+                        Instant.now(),
+                    ),
+                )
+            ).records
+                .maxByOrNull { it.endTime.toEpochMilli() }
+                ?.let {
+                    RecentSession(
+                        date = HealthyDay.dayOf(it.startTime.toEpochMilli(), zone),
+                        endMillis = it.endTime.toEpochMilli(),
+                        minutes = ((it.endTime.toEpochMilli() - it.startTime.toEpochMilli()) / 60_000L).toInt(),
+                    )
+                }
+        }.getOrNull()
+    }
+
     data class ExternalWeight(
         val kilograms: Double,
         val atMillis: Long,

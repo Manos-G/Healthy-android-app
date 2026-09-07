@@ -35,6 +35,11 @@ data class HealthySettings(
     val goalStartedOn: String? = null,
     /** Spec 10.1: off by default, and never asked about at first start. */
     val trackCycle: Boolean = false,
+    val notifyEnabled: Boolean = false,
+    /** So the job never announces the same night twice (spec 14.2). */
+    val lastNotifiedSleepEnd: Long? = null,
+    /** Spec 14.4: an old timestamp shows the system stopped the job. */
+    val lastJobRun: Long? = null,
 ) {
     companion object {
         const val DEFAULT_BEDTIME = "23:30"
@@ -64,6 +69,9 @@ class SettingsStore(private val context: Context) {
             goalRateKgPerWeek = prefs[KEY_GOAL_RATE],
             goalStartedOn = prefs[KEY_GOAL_STARTED],
             trackCycle = prefs[KEY_TRACK_CYCLE] ?: false,
+            notifyEnabled = prefs[KEY_NOTIFY] ?: false,
+            lastNotifiedSleepEnd = prefs[KEY_LAST_NOTIFIED],
+            lastJobRun = prefs[KEY_LAST_JOB],
         )
     }
 
@@ -80,6 +88,12 @@ class SettingsStore(private val context: Context) {
     suspend fun setUnitsPerWine(value: Double) = edit { it[KEY_UNITS_WINE] = value }
 
     suspend fun setTrackCycle(value: Boolean) = edit { it[KEY_TRACK_CYCLE] = value }
+
+    suspend fun setNotifyEnabled(value: Boolean) = edit { it[KEY_NOTIFY] = value }
+
+    suspend fun setLastNotifiedSleepEnd(value: Long) = edit { it[KEY_LAST_NOTIFIED] = value }
+
+    suspend fun setLastJobRun(value: Long) = edit { it[KEY_LAST_JOB] = value }
 
     /** Clearing the goal removes its values rather than leaving them stale. */
     suspend fun setNoGoal() = edit {
@@ -120,5 +134,11 @@ class SettingsStore(private val context: Context) {
         val KEY_GOAL_STARTED: Preferences.Key<String> = stringPreferencesKey("goal_started_on")
         val KEY_TRACK_CYCLE: Preferences.Key<Boolean> =
             androidx.datastore.preferences.core.booleanPreferencesKey("track_cycle")
+        val KEY_NOTIFY: Preferences.Key<Boolean> =
+            androidx.datastore.preferences.core.booleanPreferencesKey("notify_enabled")
+        val KEY_LAST_NOTIFIED: Preferences.Key<Long> =
+            androidx.datastore.preferences.core.longPreferencesKey("last_notified_sleep_end")
+        val KEY_LAST_JOB: Preferences.Key<Long> =
+            androidx.datastore.preferences.core.longPreferencesKey("last_job_run")
     }
 }

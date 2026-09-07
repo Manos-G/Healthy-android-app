@@ -389,6 +389,8 @@ class MorningViewModel(app: Application) : AndroidViewModel(app) {
                 nights.upsert(night)
             }
             pendingStageBlocks = emptyList()
+            // The reminder has served its purpose once the night is saved.
+            com.healthy.app.notify.MorningNotifier.clear(getApplication())
             _form.value = _form.value.copy(existing = true, savedAt = System.currentTimeMillis())
             onDone()
         }

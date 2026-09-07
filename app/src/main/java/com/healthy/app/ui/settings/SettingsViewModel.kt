@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.healthy.app.data.HealthySettings
 import com.healthy.app.data.SettingsStore
+import com.healthy.app.notify.MorningWorker
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
@@ -30,4 +31,14 @@ class SettingsViewModel(app: Application) : AndroidViewModel(app) {
     fun setUnitsPerWine(value: Double) = viewModelScope.launch { store.setUnitsPerWine(value) }
 
     fun setTrackCycle(value: Boolean) = viewModelScope.launch { store.setTrackCycle(value) }
+
+    /**
+     * Turning the reminder on schedules the 30-minute job; turning it off
+     * cancels it, so a disabled reminder costs no battery at all.
+     */
+    fun setNotifyEnabled(value: Boolean) = viewModelScope.launch {
+        store.setNotifyEnabled(value)
+        val app = getApplication<Application>()
+        if (value) MorningWorker.enable(app) else MorningWorker.disable(app)
+    }
 }

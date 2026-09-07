@@ -53,8 +53,14 @@ private enum class Tab(val label: String, val icon: ImageVector) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HealthyApp() {
+fun HealthyApp(openNightDate: String? = null) {
     var tab by remember { mutableStateOf(Tab.Today) }
+
+    // A notification tap opens the morning screen at that night, never the
+    // Today screen (spec 14.3).
+    androidx.compose.runtime.LaunchedEffect(openNightDate) {
+        if (openNightDate != null) tab = Tab.Morning
+    }
     val snackbars = remember { SnackbarHostState() }
 
     Scaffold(
@@ -107,6 +113,7 @@ fun HealthyApp() {
                 modifier = Modifier.fillMaxSize().padding(padding),
             )
             Tab.Morning -> MorningScreen(
+                openDate = openNightDate,
                 modifier = Modifier.fillMaxSize().padding(padding),
             )
             Tab.Weight -> WeightScreen(
