@@ -44,6 +44,10 @@ fun DataScreen(
     val surveyText by vm.survey.collectAsStateWithLifecycle()
     var pending by remember { mutableStateOf<ExportKind?>(null) }
 
+    val importPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri -> if (uri != null) vm.import(uri) }
+
     val picker = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("*/*")
     ) { uri ->
@@ -95,6 +99,35 @@ fun DataScreen(
                         fontSize = 12.sp,
                         modifier = Modifier.padding(top = 4.dp),
                     )
+                }
+            }
+        }
+
+        item {
+            SectionCard {
+                Text(
+                    "Restore from a backup",
+                    color = HealthyColors.Paper,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    "Loads a JSON export. This replaces everything on this device, so export first if there is anything here worth keeping.",
+                    color = HealthyColors.Muted,
+                    fontSize = 12.sp,
+                    modifier = Modifier.padding(top = 4.dp, bottom = 10.dp),
+                )
+                OutlinedButton(
+                    onClick = { importPicker.launch(arrayOf("application/json", "text/plain", "*/*")) },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp),
+                    border = BorderStroke(1.dp, HealthyColors.Rule),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        containerColor = HealthyColors.Raised2,
+                        contentColor = HealthyColors.Paper,
+                    ),
+                ) {
+                    Text("Import JSON", fontSize = 14.sp)
                 }
             }
         }

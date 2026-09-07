@@ -58,7 +58,10 @@ object JsonBackup {
             JSONObject()
                 .put("targetBedtime", data.settings.targetBedtime)
                 .put("halfLifeHours", data.settings.halfLifeHours)
-                .put("bedtimeLimitMg", data.settings.bedtimeLimitMg),
+                .put("bedtimeLimitMg", data.settings.bedtimeLimitMg)
+                .put("fluidTargetMl", data.settings.fluidTargetMl)
+                .put("unitsPerBeer", data.settings.unitsPerBeer)
+                .put("unitsPerWine", data.settings.unitsPerWine),
         )
 
         root.put("nights", data.nights.map { n ->
@@ -96,6 +99,7 @@ object JsonBackup {
             obj {
                 put("id", d.id); put("name", d.name); put("mg", d.mg)
                 put("volumeMl", d.volumeMl); put("timestamp", d.timestamp)
+                put("alcoholUnits", d.alcoholUnits)
             }
         }.toJsonArray())
 

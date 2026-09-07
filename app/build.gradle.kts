@@ -101,6 +101,9 @@ dependencies {
     ksp(libs.room.compiler)
 
     testImplementation(libs.junit)
+    // android.jar stubs org.json for unit tests, so the real implementation is
+    // needed to test the export and import round trip off-device.
+    testImplementation("org.json:json:20240303")
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.test.runner)
     androidTestImplementation(libs.room.testing)

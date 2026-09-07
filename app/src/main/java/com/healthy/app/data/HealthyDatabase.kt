@@ -8,6 +8,7 @@ import androidx.room.TypeConverters
 import com.healthy.app.data.converter.EditedFieldsConverter
 import com.healthy.app.data.dao.CustomDrinkDao
 import com.healthy.app.data.dao.DrinkDao
+import com.healthy.app.data.dao.MaintenanceDao
 import com.healthy.app.data.dao.MealDao
 import com.healthy.app.data.dao.NightDao
 import com.healthy.app.data.dao.NoteDao
@@ -55,6 +56,7 @@ abstract class HealthyDatabase : RoomDatabase() {
     abstract fun mealDao(): MealDao
     abstract fun recipeDao(): RecipeDao
     abstract fun noteDao(): NoteDao
+    abstract fun maintenanceDao(): MaintenanceDao
 
     companion object {
         const val VERSION = 3

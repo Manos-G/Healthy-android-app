@@ -8,6 +8,7 @@ import com.healthy.app.data.HealthyDatabase
 import com.healthy.app.data.SettingsStore
 import com.healthy.app.data.export.Csv
 import com.healthy.app.data.export.JsonBackup
+import com.healthy.app.data.export.JsonRestore
 import com.healthy.app.health.HealthReader
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -15,6 +16,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import androidx.room.withTransaction
 import kotlinx.coroutines.withContext
 
 enum class ExportKind(val fileName: String, val mime: String, val label: String) {
@@ -157,6 +159,73 @@ class DataViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun sourcesOf(packages: Set<String>): String =
         if (packages.isEmpty()) "nothing" else packages.joinToString(", ") { it.substringAfterLast('.') }
+
+    /**
+     * Replaces everything on the device with the contents of a backup
+     * (spec 5.4).
+     *
+     * Replace rather than merge, and in one transaction: a half-applied import
+     * that mixed two histories would be worse than either. Nothing is deleted
+     * until the file has parsed, so a bad file leaves the database untouched.
+     */
+    fun import(source: Uri) {
+        viewModelScope.launch {
+            _status.value = "Reading the file…"
+            val text = runCatching {
+                withContext(Dispatchers.IO) {
+                    getApplication<Application>().contentResolver
+                        .openInputStream(source)?.bufferedReader()?.use { it.readText() }
+                        ?: error("the file could not be opened")
+                }
+            }.getOrElse {
+                _status.value = "Import failed: ${it.message}"
+                return@launch
+            }
+
+            when (val parsed = JsonRestore.parse(text)) {
+                is JsonRestore.Result.Failed -> {
+                    _status.value = "Import failed: ${parsed.reason} Nothing was changed."
+                }
+                is JsonRestore.Result.Ok -> {
+                    runCatching { apply(parsed.data) }
+                        .onSuccess {
+                            _status.value = "Imported ${parsed.data.nights.size} nights, " +
+                                "${parsed.data.drinks.size} drinks and " +
+                                "${parsed.data.weights.size} weights."
+                        }
+                        .onFailure { _status.value = "Import failed while writing: ${it.message}" }
+                    refreshCounts()
+                }
+            }
+        }
+    }
+
+    private suspend fun apply(data: JsonBackup.Everything) = db.withTransaction {
+        // One transaction, so a failure part way through rolls the whole
+        // import back rather than leaving two histories mixed together.
+        val m = db.maintenanceDao()
+        m.clearStageBlocks(); m.clearRecipeItems(); m.clearNights(); m.clearDrinks()
+        m.clearCustomDrinks(); m.clearWeights(); m.clearProducts(); m.clearMeals()
+        m.clearRecipes(); m.clearNotes()
+
+        data.nights.forEach { db.nightDao().upsert(it) }
+        data.stageBlocks.groupBy { it.nightDate }.forEach { (date, blocks) ->
+            db.nightDao().replaceStageBlocks(date, blocks)
+        }
+        data.drinks.forEach { db.drinkDao().insert(it) }
+        data.customDrinks.forEach { db.customDrinkDao().insert(it) }
+        data.weights.forEach { db.weightDao().upsert(it) }
+        data.products.forEach { db.productDao().upsert(it) }
+        db.mealDao().insertAll(data.meals)
+        data.recipes.forEach { db.recipeDao().upsertRecipe(it) }
+        db.recipeDao().insertItems(data.recipeItems)
+        data.notes.forEach { db.noteDao().insert(it) }
+
+        settingsStore.setTargetBedtime(data.settings.targetBedtime)
+        settingsStore.setHalfLifeHours(data.settings.halfLifeHours)
+        settingsStore.setBedtimeLimitMg(data.settings.bedtimeLimitMg)
+        settingsStore.setFluidTargetMl(data.settings.fluidTargetMl)
+    }
 
     fun clearStatus() {
         _status.value = null
