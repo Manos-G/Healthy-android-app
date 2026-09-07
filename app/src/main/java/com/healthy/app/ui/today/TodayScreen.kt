@@ -2,8 +2,9 @@ package com.healthy.app.ui.today
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -14,20 +15,15 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -42,6 +38,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.healthy.app.core.CatalogDrink
 import com.healthy.app.data.entity.Drink
+import com.healthy.app.data.entity.Night
+import com.healthy.app.ui.components.RatingScale
 import com.healthy.app.ui.theme.HealthyColors
 import com.healthy.app.ui.theme.HeroNumeral
 import java.time.Instant
@@ -53,12 +51,15 @@ private val HHMM: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 private fun Long.asClock(): String =
     Instant.ofEpochMilli(this).atZone(ZoneId.systemDefault()).toLocalTime().format(HHMM)
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TodayScreen(vm: TodayViewModel = viewModel()) {
+fun TodayScreen(
+    snackbars: SnackbarHostState,
+    modifier: Modifier = Modifier,
+    vm: TodayViewModel = viewModel(),
+) {
     val state by vm.state.collectAsStateWithLifecycle()
     val lastLogged by vm.lastLogged.collectAsStateWithLifecycle()
-    val snackbars = remember { SnackbarHostState() }
+    val energyPrompt by vm.energyPrompt.collectAsStateWithLifecycle()
 
     // One tap logs; the snackbar is the only chance to take it back (spec 5.1).
     LaunchedEffect(lastLogged) {
@@ -70,32 +71,55 @@ fun TodayScreen(vm: TodayViewModel = viewModel()) {
         if (result == SnackbarResult.ActionPerformed) vm.undoLast() else vm.clearSnackbar()
     }
 
-    Scaffold(
-        containerColor = HealthyColors.Ground,
-        snackbarHost = { SnackbarHost(snackbars) },
-        topBar = {
-            TopAppBar(
-                title = { Text("Healthy", fontSize = 16.sp, fontWeight = FontWeight.SemiBold) },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = HealthyColors.Ground,
-                    titleContentColor = HealthyColors.Paper,
-                ),
-            )
-        },
-    ) { padding ->
-        LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            item { HeroCard(state) }
-            item { CatalogCard(state.catalog, vm::log) }
-            item { EntriesCard(state.entries, vm::delete) }
+    LazyColumn(
+        modifier = modifier.padding(horizontal = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+        contentPadding = PaddingValues(vertical = 14.dp),
+    ) {
+        item { HeroCard(state) }
+        energyPrompt?.let { night ->
+            item {
+                EnergyPromptCard(night) { rating -> vm.rateEnergy(night.date, rating) }
+            }
         }
+        item { CatalogCard(state.catalog, vm::log) }
+        item { EntriesCard(state.entries, vm::delete) }
+    }
+}
+
+/**
+ * Collects the 15:00 energy rating (spec 5.2).
+ *
+ * The morning form cannot ask for this: at 08:00 the user has no idea what
+ * their afternoon will feel like. So the morning saves alertness alone and
+ * this card appears here after 15:00 for the night that is still missing it.
+ */
+@Composable
+private fun EnergyPromptCard(night: Night, onRate: (Int) -> Unit) {
+    SectionCard {
+        Text(
+            "How is your energy?",
+            color = HealthyColors.Paper,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.SemiBold,
+        )
+        Text(
+            "For the night of ${night.date}. One tap finishes it.",
+            color = HealthyColors.Muted,
+            fontSize = 12.sp,
+            modifier = Modifier.padding(top = 2.dp),
+        )
+        RatingScale(
+            value = null,
+            lowLabel = "flat",
+            highLabel = "strong",
+            modifier = Modifier.padding(top = 12.dp),
+        ) { picked -> picked?.let(onRate) }
     }
 }
 
 @Composable
-private fun SectionCard(content: @Composable ColumnScopeAlias.() -> Unit) {
+private fun SectionCard(content: @Composable ColumnScope.() -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
@@ -104,8 +128,6 @@ private fun SectionCard(content: @Composable ColumnScopeAlias.() -> Unit) {
         Column(Modifier.padding(16.dp)) { content() }
     }
 }
-
-private typealias ColumnScopeAlias = androidx.compose.foundation.layout.ColumnScope
 
 @Composable
 private fun HeroCard(state: TodayState) {

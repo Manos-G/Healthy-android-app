@@ -51,6 +51,27 @@ interface NightDao {
     @Query("SELECT COUNT(*) FROM night WHERE alertness IS NOT NULL AND energy3pm IS NOT NULL")
     fun observeRatedCount(): Flow<Int>
 
+    /**
+     * The night waiting for its afternoon rating (spec 5.2).
+     *
+     * The user cannot know their 15:00 energy while it is still morning, so
+     * the morning save leaves `energy3pm` empty and the Today screen collects
+     * it later. This finds the most recent night that was rated in the morning
+     * but never got its second rating.
+     */
+    @Query(
+        """
+        SELECT * FROM night
+        WHERE alertness IS NOT NULL AND energy3pm IS NULL
+        ORDER BY date DESC
+        LIMIT 1
+        """
+    )
+    fun observeAwaitingEnergyRating(): Flow<Night?>
+
+    @Query("UPDATE night SET energy3pm = :energy WHERE date = :date")
+    suspend fun setEnergy3pm(date: String, energy: Int)
+
     /** True when the notification job has already recorded this night (spec 14.2). */
     @Query("SELECT EXISTS(SELECT 1 FROM night WHERE date = :date)")
     suspend fun exists(date: String): Boolean

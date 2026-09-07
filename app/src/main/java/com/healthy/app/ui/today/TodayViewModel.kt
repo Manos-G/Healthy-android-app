@@ -11,6 +11,7 @@ import com.healthy.app.data.HealthyDatabase
 import com.healthy.app.data.HealthySettings
 import com.healthy.app.data.SettingsStore
 import com.healthy.app.data.entity.Drink
+import com.healthy.app.data.entity.Night
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -57,6 +58,24 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
      * A minute is fine: caffeine at a 5 h half-life moves about 0.2 % a minute.
      */
     private val tick = MutableStateFlow(System.currentTimeMillis())
+
+    /**
+     * The night that was rated this morning but still has no 15:00 energy,
+     * surfaced only after 15:00 (spec 5.2). Before that hour the user cannot
+     * answer, so the card must not appear.
+     */
+    val energyPrompt: StateFlow<Night?> =
+        combine(tick, db.nightDao().observeAwaitingEnergyRating()) { now, night ->
+            val hour = java.time.Instant.ofEpochMilli(now)
+                .atZone(java.time.ZoneId.systemDefault()).hour
+            if (hour >= ENERGY_PROMPT_HOUR) night else null
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    fun rateEnergy(date: String, energy: Int) {
+        viewModelScope.launch {
+            db.nightDao().setEnergy3pm(date, energy)
+        }
+    }
 
     /** Set after a log so the snackbar can offer an undo (spec 5.1). */
     private val _lastLogged = MutableStateFlow<Drink?>(null)
@@ -192,5 +211,7 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
     private companion object {
         const val DAY_MILLIS = 24 * 60 * 60 * 1000L
         const val MILLIS_PER_HOUR = 3_600_000.0
+        /** Spec 5.2 asks for energy "at approximately 15:00". */
+        const val ENERGY_PROMPT_HOUR = 15
     }
 }

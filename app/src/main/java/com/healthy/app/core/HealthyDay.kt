@@ -52,6 +52,20 @@ object HealthyDay {
     fun today(zone: ZoneId = ZoneId.systemDefault()): String =
         dayOf(System.currentTimeMillis(), zone)
 
+    /**
+     * The logical day the night just finished is filed under.
+     *
+     * A night is filed under the day its sleep started, and sleep that starts
+     * before 04:00 belongs to the previous logical day. So when the user opens
+     * the morning screen after waking, the night they mean is yesterday's
+     * logical day, not today's — today's night has not happened yet.
+     *
+     * Sleep that starts after 04:00 and ends the same logical day (a long
+     * daytime sleep) is the exception; the date arrows cover it.
+     */
+    fun lastNight(zone: ZoneId = ZoneId.systemDefault()): String =
+        plusDays(today(zone), -1)
+
     /** Shift a logical day by a number of days. */
     fun plusDays(day: String, days: Long): String =
         LocalDate.parse(day, ISO).plusDays(days).format(ISO)
