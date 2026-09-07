@@ -35,8 +35,13 @@ fun DataScreen(
     vm: DataViewModel = viewModel(),
 ) {
     var showSources by remember { mutableStateOf(false) }
+    var showNotes by remember { mutableStateOf(false) }
     if (showSources) {
         com.healthy.app.ui.sources.SourcesScreen(onClose = { showSources = false })
+        return
+    }
+    if (showNotes) {
+        com.healthy.app.ui.notes.NotesScreen(onClose = { showNotes = false })
         return
     }
     val status by vm.status.collectAsStateWithLifecycle()
@@ -188,6 +193,35 @@ fun DataScreen(
                         fontSize = 12.sp,
                         modifier = Modifier.padding(top = 10.dp),
                     )
+                }
+            }
+        }
+
+        item {
+            SectionCard {
+                Text(
+                    "Notes",
+                    color = HealthyColors.Paper,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    "A calendar, a search and every note you have written. Pain and illness change sleep more than caffeine does.",
+                    color = HealthyColors.Muted,
+                    fontSize = 12.sp,
+                    modifier = Modifier.padding(top = 4.dp, bottom = 10.dp),
+                )
+                OutlinedButton(
+                    onClick = { showNotes = true },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp),
+                    border = BorderStroke(1.dp, HealthyColors.Rule),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        containerColor = HealthyColors.Raised2,
+                        contentColor = HealthyColors.Paper,
+                    ),
+                ) {
+                    Text("Open notes", fontSize = 14.sp)
                 }
             }
         }

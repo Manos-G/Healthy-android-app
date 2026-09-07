@@ -195,6 +195,20 @@ class SchemaTest {
         assertEquals(1, db.noteDao().search("migraine").first().size)
     }
 
+    /**
+     * The notes screen searches as the user types, so a prefix has to match.
+     * NoteSearchTest checks the query is built correctly; this checks SQLite
+     * agrees.
+     */
+    @Test
+    fun aPrefixMatchesBeforeTheWordIsFinished() = runBlocking {
+        db.noteDao().insert(Note(date = "2026-03-16", text = "sore throat again", createdAt = 1L))
+
+        assertEquals(1, db.noteDao().search("\"thro\"*").first().size)
+        assertEquals(1, db.noteDao().search("\"sore\"* \"thro\"*").first().size)
+        assertTrue(db.noteDao().search("\"zzz\"*").first().isEmpty())
+    }
+
     @Test
     fun recipeSavesWithItemsAndCascadesOnDelete() = runBlocking {
         val id = db.recipeDao().saveRecipe(

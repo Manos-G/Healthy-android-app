@@ -66,6 +66,12 @@ fun MorningScreen(
         item { AlertnessCard(form, vm) }
         item { ContextCard(form, vm) }
         item { SaveCard(form, vm) }
+        item {
+            com.healthy.app.ui.notes.QuickNoteButton(
+                date = form.date,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
     }
 }
 

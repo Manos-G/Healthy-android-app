@@ -85,6 +85,11 @@ fun TodayScreen(
         item { FluidCard(state, vm::logFluid) }
         item { CatalogCard(state.catalog, vm::log) }
         item { EntriesCard(state.entries, vm::delete) }
+        item {
+            com.healthy.app.ui.notes.QuickNoteButton(
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
     }
 }
 
