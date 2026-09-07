@@ -33,6 +33,8 @@ data class HealthySettings(
     val goalHoldKg: Double? = null,
     val goalRateKgPerWeek: Double? = null,
     val goalStartedOn: String? = null,
+    /** Spec 10.1: off by default, and never asked about at first start. */
+    val trackCycle: Boolean = false,
 ) {
     companion object {
         const val DEFAULT_BEDTIME = "23:30"
@@ -61,6 +63,7 @@ class SettingsStore(private val context: Context) {
             goalHoldKg = prefs[KEY_GOAL_HOLD],
             goalRateKgPerWeek = prefs[KEY_GOAL_RATE],
             goalStartedOn = prefs[KEY_GOAL_STARTED],
+            trackCycle = prefs[KEY_TRACK_CYCLE] ?: false,
         )
     }
 
@@ -75,6 +78,8 @@ class SettingsStore(private val context: Context) {
     suspend fun setUnitsPerBeer(value: Double) = edit { it[KEY_UNITS_BEER] = value }
 
     suspend fun setUnitsPerWine(value: Double) = edit { it[KEY_UNITS_WINE] = value }
+
+    suspend fun setTrackCycle(value: Boolean) = edit { it[KEY_TRACK_CYCLE] = value }
 
     /** Clearing the goal removes its values rather than leaving them stale. */
     suspend fun setNoGoal() = edit {
@@ -113,5 +118,7 @@ class SettingsStore(private val context: Context) {
         val KEY_GOAL_HOLD: Preferences.Key<Double> = doublePreferencesKey("goal_hold_kg")
         val KEY_GOAL_RATE: Preferences.Key<Double> = doublePreferencesKey("goal_rate_kg_week")
         val KEY_GOAL_STARTED: Preferences.Key<String> = stringPreferencesKey("goal_started_on")
+        val KEY_TRACK_CYCLE: Preferences.Key<Boolean> =
+            androidx.datastore.preferences.core.booleanPreferencesKey("track_cycle")
     }
 }

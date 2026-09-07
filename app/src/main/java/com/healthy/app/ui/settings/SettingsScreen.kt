@@ -114,6 +114,57 @@ fun SettingsScreen(
             }
         }
 
+        item {
+            SectionCard {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Title("Track menstrual cycle")
+                        Text(
+                            "Off by default. Turning it on adds a flow field to the morning " +
+                                "screen and the cycle day to the comparison table, and asks " +
+                                "Health Connect for menstrual data — only then, and only if " +
+                                "you say yes.",
+                            color = HealthyColors.Muted,
+                            fontSize = 11.sp,
+                            modifier = Modifier.padding(top = 4.dp),
+                        )
+                    }
+                    androidx.compose.material3.Switch(
+                        checked = settings.trackCycle,
+                        onCheckedChange = { vm.setTrackCycle(it) },
+                        colors = androidx.compose.material3.SwitchDefaults.colors(
+                            checkedThumbColor = HealthyColors.Ground,
+                            checkedTrackColor = HealthyColors.Sleep,
+                            uncheckedThumbColor = HealthyColors.Muted,
+                            uncheckedTrackColor = HealthyColors.Raised2,
+                        ),
+                    )
+                }
+                if (settings.trackCycle) {
+                    val launcher = androidx.activity.compose.rememberLauncherForActivityResult(
+                        com.healthy.app.health.HealthConnect.requestContract()
+                    ) { }
+                    androidx.compose.material3.TextButton(
+                        onClick = {
+                            launcher.launch(
+                                com.healthy.app.health.HealthConnect.MENSTRUATION_PERMISSIONS
+                            )
+                        },
+                    ) {
+                        Text(
+                            "Grant Health Connect menstrual access",
+                            color = HealthyColors.Sleep,
+                            fontSize = 13.sp,
+                        )
+                    }
+                }
+            }
+        }
+
         if (onClose != null) {
             item {
                 Button(

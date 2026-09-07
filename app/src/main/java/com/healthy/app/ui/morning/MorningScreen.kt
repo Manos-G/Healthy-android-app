@@ -67,6 +67,9 @@ fun MorningScreen(
             item { HypnogramCard(form) }
         }
         item { AlertnessCard(form, vm) }
+        if (form.trackCycle) {
+            item { CycleCard(form, vm) }
+        }
         item { ContextCard(form, vm) }
         item { SaveCard(form, vm) }
         item {
@@ -331,6 +334,51 @@ private fun AlertnessCard(form: MorningForm, vm: MorningViewModel) {
             fontSize = 11.sp,
             modifier = Modifier.padding(top = 10.dp),
         )
+    }
+}
+
+/**
+ * The flow field (spec 10.3). Present only when the toggle is on; the app
+ * never asks about a gender and shows nothing here otherwise.
+ */
+@Composable
+private fun CycleCard(form: MorningForm, vm: MorningViewModel) {
+    SectionCard {
+        CardTitle(
+            "Cycle",
+            form.cycleDay?.let { "Day $it." } ?: "No period start recorded yet.",
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            listOf("none", "light", "medium", "heavy").forEach { option ->
+                val selected = form.flow == option
+                androidx.compose.material3.OutlinedButton(
+                    onClick = { vm.update { it.copy(flow = if (selected) null else option) } },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(10.dp),
+                    border = BorderStroke(
+                        1.dp,
+                        if (selected) HealthyColors.Sleep else HealthyColors.Rule,
+                    ),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        containerColor = if (selected) {
+                            HealthyColors.Sleep.copy(alpha = 0.18f)
+                        } else {
+                            HealthyColors.Raised2
+                        },
+                        contentColor = if (selected) HealthyColors.Sleep else HealthyColors.Paper,
+                    ),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                        horizontal = 4.dp,
+                        vertical = 8.dp,
+                    ),
+                ) {
+                    Text(option, fontSize = 11.sp)
+                }
+            }
+        }
     }
 }
 

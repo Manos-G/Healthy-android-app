@@ -16,6 +16,14 @@
     <uses-permission android:name="android.permission.health.WRITE_WEIGHT" />
     <uses-permission android:name="android.permission.health.WRITE_HYDRATION" />
 
+    <!--
+      Declared so they can be requested, but requested only when the user
+      turns cycle tracking on (spec 10.2). A declared permission is not a
+      granted one, and nothing here is asked for at first start.
+    -->
+    <uses-permission android:name="android.permission.health.READ_MENSTRUATION" />
+    <uses-permission android:name="android.permission.health.WRITE_MENSTRUATION" />
+
     <!-- Lets the app check whether a Health Connect provider is installed. -->
     <queries>
         <package android:name="com.google.android.apps.healthdata" />

@@ -6,6 +6,8 @@ import androidx.health.connect.client.PermissionController
 import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.HeartRateRecord
 import androidx.health.connect.client.records.HydrationRecord
+import androidx.health.connect.client.records.MenstruationFlowRecord
+import androidx.health.connect.client.records.MenstruationPeriodRecord
 import androidx.health.connect.client.records.OxygenSaturationRecord
 import androidx.health.connect.client.records.SleepSessionRecord
 import androidx.health.connect.client.records.WeightRecord
@@ -30,6 +32,17 @@ object HealthConnect {
         HealthPermission.getReadPermission(SleepSessionRecord::class),
         HealthPermission.getReadPermission(HeartRateRecord::class),
         HealthPermission.getReadPermission(OxygenSaturationRecord::class),
+    )
+
+    /**
+     * Requested only when the user turns cycle tracking on (spec 10.2), which
+     * is why they are not in the manifest's always-on set above.
+     */
+    val MENSTRUATION_PERMISSIONS: Set<String> = setOf(
+        HealthPermission.getReadPermission(MenstruationPeriodRecord::class),
+        HealthPermission.getWritePermission(MenstruationPeriodRecord::class),
+        HealthPermission.getReadPermission(MenstruationFlowRecord::class),
+        HealthPermission.getWritePermission(MenstruationFlowRecord::class),
     )
 
     /** Requested in step 7, listed here so the rationale screen can explain them. */

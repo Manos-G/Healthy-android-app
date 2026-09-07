@@ -70,6 +70,10 @@ data class MorningForm(
     /** Both cycle lengths, labelled by source (spec 18.5). */
     val watchCycleMinutes: Int? = null,
     val heartCycleMinutes: Int? = null,
+    /** none, light, medium or heavy. Hidden while the toggle is off (spec 10). */
+    val flow: String? = null,
+    val trackCycle: Boolean = false,
+    val cycleDay: Int? = null,
 ) {
     /**
      * Sleep duration in minutes, handling a night that crosses midnight and one
@@ -114,6 +118,7 @@ class MorningViewModel(app: Application) : AndroidViewModel(app) {
     private val nights = db.nightDao()
     private val drinks = db.drinkDao()
     private val reader = HealthReader(app)
+    private val settingsStore = com.healthy.app.data.SettingsStore(app)
 
     /** Held between a sync and the save that writes them (spec 4.2). */
     private var pendingStageBlocks: List<com.healthy.app.data.entity.StageBlock> = emptyList()
@@ -134,6 +139,11 @@ class MorningViewModel(app: Application) : AndroidViewModel(app) {
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptySet())
 
     init {
+        viewModelScope.launch {
+            settingsStore.settings.collect { s ->
+                _form.value = _form.value.copy(trackCycle = s.trackCycle)
+            }
+        }
         refreshHealthConnect()
         viewModelScope.launch {
             selectedDate.flatMapLatest { date -> nights.observe(date) }.collect { night ->

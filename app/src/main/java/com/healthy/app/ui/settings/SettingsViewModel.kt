@@ -28,4 +28,6 @@ class SettingsViewModel(app: Application) : AndroidViewModel(app) {
     fun setUnitsPerBeer(value: Double) = viewModelScope.launch { store.setUnitsPerBeer(value) }
 
     fun setUnitsPerWine(value: Double) = viewModelScope.launch { store.setUnitsPerWine(value) }
+
+    fun setTrackCycle(value: Boolean) = viewModelScope.launch { store.setTrackCycle(value) }
 }
