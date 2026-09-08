@@ -6,6 +6,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.healthy.app.analysis.Nutrition
 import com.healthy.app.core.HealthyDay
+import com.healthy.app.core.LogWindow
 import com.healthy.app.data.HealthyDatabase
 import com.healthy.app.data.entity.MealEntry
 import com.healthy.app.data.entity.Product
@@ -28,8 +29,20 @@ data class LoggedItem(
 )
 
 data class FoodState(
-    val today: List<LoggedItem> = emptyList(),
+    /** What the list shows, which follows [window] and may cross the boundary. */
+    val listed: List<LoggedItem> = emptyList(),
+    /**
+     * Totals for one logical day, always.
+     *
+     * The energy target is a daily figure, so a percentage of a rolling
+     * 24 hours would be a percentage of nothing in particular. When the list
+     * is rolling these are today's; when a past day is selected they are that
+     * day's, so the card always describes a real day.
+     */
     val totals: Nutrition.Totals = Nutrition.Totals(),
+    val window: LogWindow = LogWindow.Rolling,
+    val totalsDay: String = "",
+    val nowMillis: Long = 0,
     val searchResults: List<Product> = emptyList(),
     /** The last seven logged days, for the mean beside today (spec 16.5). */
     val recentDays: List<Nutrition.Totals> = emptyList(),
@@ -50,18 +63,31 @@ class FoodViewModel(app: Application) : AndroidViewModel(app) {
     private val _pendingPortion = MutableStateFlow<Product?>(null)
     val pendingPortion: StateFlow<Product?> = _pendingPortion.asStateFlow()
 
-    private val day = MutableStateFlow(HealthyDay.today())
+    private val window = MutableStateFlow<LogWindow>(LogWindow.Rolling)
+
+    /** Re-read on each change so "the last 24 hours" moves with the clock. */
+    private val nowAtChange = MutableStateFlow(System.currentTimeMillis())
+
+    fun setWindow(value: LogWindow) {
+        nowAtChange.value = System.currentTimeMillis()
+        window.value = value
+    }
 
     val state: StateFlow<FoodState> =
         combine(
-            day.flatMapLatest { d ->
-                meals.observeBetween(HealthyDay.startOf(d), HealthyDay.endOf(d))
+            combine(window, nowAtChange) { w, now -> w to now }.flatMapLatest { (w, now) ->
+                val day = w.dayForTotals(now)
+                // Wide enough for both the list's window and the day the
+                // totals are measured over, which are not the same stretch.
+                val from = minOf(w.startMillis(now), HealthyDay.startOf(day))
+                val to = maxOf(w.endMillis(now), HealthyDay.endOf(day))
+                meals.observeBetween(from, to).map { Triple(it, w, now) }
             },
             _query.flatMapLatest { q ->
                 if (q.isBlank()) kotlinx.coroutines.flow.flowOf(emptyList())
                 else products.search(q)
             },
-        ) { entries, results ->
+        ) { (entries, w, now), results ->
             val byBarcode = entries.mapNotNull { it.barcode }.distinct()
                 .mapNotNull { code -> products.byBarcode(code)?.let { code to it } }
                 .toMap()
@@ -74,9 +100,22 @@ class FoodViewModel(app: Application) : AndroidViewModel(app) {
                     totals = product?.let { Nutrition.forGrams(it, entry.grams) } ?: Nutrition.Totals(),
                 )
             }
+            val day = w.dayForTotals(now)
+            val dayStart = HealthyDay.startOf(day)
+            val dayEnd = HealthyDay.endOf(day)
+            val listStart = w.startMillis(now)
+            val listEnd = w.endMillis(now)
+
             FoodState(
-                today = items.sortedByDescending { it.entry.timestamp },
-                totals = items.fold(Nutrition.Totals()) { acc, i -> acc + i.totals },
+                listed = items
+                    .filter { it.entry.timestamp in listStart until listEnd }
+                    .sortedByDescending { it.entry.timestamp },
+                totals = items
+                    .filter { it.entry.timestamp in dayStart until dayEnd }
+                    .fold(Nutrition.Totals()) { acc, i -> acc + i.totals },
+                window = w,
+                totalsDay = day,
+                nowMillis = now,
                 searchResults = results,
                 recentDays = recentDayTotals(),
             )

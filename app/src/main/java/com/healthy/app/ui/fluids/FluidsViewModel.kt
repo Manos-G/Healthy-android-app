@@ -9,6 +9,7 @@ import com.healthy.app.core.BeverageCatalog
 import com.healthy.app.core.BeverageCategory
 import com.healthy.app.core.Caffeine
 import com.healthy.app.core.HealthyDay
+import com.healthy.app.core.LogWindow
 import com.healthy.app.data.HealthyDatabase
 import com.healthy.app.data.HealthySettings
 import com.healthy.app.data.SettingsStore
@@ -39,7 +40,11 @@ data class FluidsState(
     val nowMillis: Long = 0,
     val bedtimeMillis: Long = 0,
     val limitMg: Int = Caffeine.DEFAULT_BEDTIME_LIMIT_MG,
+    /** The rows the list is showing, which is [window], not necessarily today. */
     val entries: List<Drink> = emptyList(),
+    val window: LogWindow = LogWindow.Rolling,
+    /** Where the 04:00 boundary falls in the list, so it can be marked. */
+    val boundaryMillis: Long? = null,
     /** Every dose still decaying into the window, needed to draw the curve. */
     val allDoses: List<Drink> = emptyList(),
     val halfLifeHours: Double = Caffeine.DEFAULT_HALF_LIFE_HOURS,
@@ -74,6 +79,17 @@ class FluidsViewModel(app: Application) : AndroidViewModel(app) {
      * A minute is fine: caffeine at a 5 h half-life moves about 0.2 % a minute.
      */
     private val tick = MutableStateFlow(System.currentTimeMillis())
+
+    /**
+     * Which stretch of the log the list shows. Defaults to the rolling day
+     * because that is the question being asked when the app is opened; the
+     * whole-day views are a step away for correcting an earlier entry.
+     */
+    private val window = MutableStateFlow<LogWindow>(LogWindow.Rolling)
+
+    fun setWindow(value: LogWindow) {
+        window.value = value
+    }
 
     /**
      * The night that was rated this morning but still has no 15:00 energy,
@@ -111,17 +127,22 @@ class FluidsViewModel(app: Application) : AndroidViewModel(app) {
             tick,
             settingsStore.settings,
             customDrinks.observeAll(),
-        ) { now, settings, custom -> Inputs(now, settings, custom) }
-            .flatMapLatest { (now, settings, custom) ->
+            window,
+        ) { now, settings, custom, window -> Inputs(now, settings, custom, window) }
+            .flatMapLatest { (now, settings, custom, window) ->
                 val dayStart = HealthyDay.startOf(HealthyDay.dayOf(now))
                 val dayEnd = dayStart + DAY_MILLIS
                 // Doses from before the window still decay into it, so the
                 // query must reach roughly six half-lives back or the curve
                 // starts the day at a false zero.
                 val lookback = (settings.halfLifeHours * 6 * MILLIS_PER_HOUR).toLong()
+                // Far enough back for the curve and for whichever window the
+                // list is showing, whichever of the two reaches further.
+                val from = minOf(dayStart - lookback, window.startMillis(now))
+                val to = maxOf(dayEnd, window.endMillis(now))
 
                 combine(
-                    drinks.observeDecayWindow(dayStart - lookback, dayEnd),
+                    drinks.observeDecayWindow(from, to),
                     recentByCategory(),
                     drinks.observeAlcoholUnits(dayStart - WEEK_MILLIS + DAY_MILLIS, dayEnd),
                 ) { all, recent, weekUnits ->
@@ -134,6 +155,7 @@ class FluidsViewModel(app: Application) : AndroidViewModel(app) {
                         dayStart = dayStart,
                         dayEnd = dayEnd,
                         weekAlcoholUnits = weekUnits,
+                        window = window,
                     )
                 }
             }
@@ -143,6 +165,7 @@ class FluidsViewModel(app: Application) : AndroidViewModel(app) {
         val now: Long,
         val settings: HealthySettings,
         val custom: List<com.healthy.app.data.entity.CustomDrink>,
+        val window: LogWindow,
     )
 
     /**
@@ -210,11 +233,18 @@ class FluidsViewModel(app: Application) : AndroidViewModel(app) {
         dayStart: Long,
         dayEnd: Long,
         weekAlcoholUnits: Double,
+        window: LogWindow,
     ): FluidsState {
         val bedtimeMillis = nextBedtime(now, settings.targetBedtime)
         val bedtimeMg = Caffeine.levelAt(all, bedtimeMillis, settings.halfLifeHours)
         val curve = Caffeine.curve(all, dayStart, dayEnd, settings.halfLifeHours)
+        // Two different windows on purpose. The totals are measured against
+        // daily guidelines and so must use the logical day; the list answers
+        // "what have I had lately" and follows whatever the user selected.
         val today = all.filter { it.timestamp in dayStart until dayEnd }
+        val listed = all.filter {
+            it.timestamp >= window.startMillis(now) && it.timestamp < window.endMillis(now)
+        }
 
         return FluidsState(
             nowMg = Caffeine.levelAt(all, now, settings.halfLifeHours).toInt(),
@@ -230,7 +260,9 @@ class FluidsViewModel(app: Application) : AndroidViewModel(app) {
             nowMillis = now,
             bedtimeMillis = bedtimeMillis,
             limitMg = settings.bedtimeLimitMg,
-            entries = today.sortedByDescending { it.timestamp },
+            entries = listed.sortedByDescending { it.timestamp },
+            window = window,
+            boundaryMillis = LogWindow.boundaryWithin(window, now),
             allDoses = all,
             halfLifeHours = settings.halfLifeHours,
             totalMg = today.sumOf { it.mg },

@@ -104,7 +104,7 @@ fun FluidsScreen(
                 )
             }
         }
-        item { EntriesCard(state.entries, vm::delete) }
+        item { EntriesCard(state, vm::setWindow, vm::delete) }
         item {
             com.healthy.app.scan.ScanButton(modifier = Modifier.fillMaxWidth())
         }
@@ -559,24 +559,58 @@ private fun entryFigure(entry: Drink): String = when {
 }
 
 @Composable
-private fun EntriesCard(entries: List<Drink>, onDelete: (Drink) -> Unit) {
+private fun EntriesCard(
+    state: FluidsState,
+    onWindow: (com.healthy.app.core.LogWindow) -> Unit,
+    onDelete: (Drink) -> Unit,
+) {
     SectionCard {
-        Text(
-            "Today",
-            color = HealthyColors.Paper,
-            fontSize = 15.sp,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.padding(bottom = 8.dp),
+        com.healthy.app.ui.components.WindowSelector(
+            window = state.window,
+            now = state.nowMillis,
+            onChange = onWindow,
         )
-        if (entries.isEmpty()) {
+        Text(
+            if (state.window is com.healthy.app.core.LogWindow.Rolling) {
+                "Everything you have drunk in the last 24 hours, whichever day the " +
+                    "app counts it against. Step back to correct an earlier day."
+            } else {
+                "One whole day, 04:00 to 04:00."
+            },
+            color = HealthyColors.Muted,
+            fontSize = 11.sp,
+            modifier = Modifier.padding(top = 2.dp, bottom = 8.dp),
+        )
+
+        if (state.entries.isEmpty()) {
             Text(
-                "Nothing logged yet today.",
+                "Nothing logged in this window.",
                 color = HealthyColors.Muted,
                 fontSize = 13.sp,
             )
             return@SectionCard
         }
-        entries.forEach { entry ->
+
+        // The rows run newest first, so the boundary is crossed once, going
+        // backwards. Everything below it counts against the previous day.
+        var boundaryDrawn = false
+        state.entries.forEach { entry ->
+            val boundary = state.boundaryMillis
+            if (boundary != null && !boundaryDrawn && entry.timestamp < boundary) {
+                boundaryDrawn = true
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    HorizontalDivider(color = HealthyColors.Rule, modifier = Modifier.weight(1f))
+                    Text(
+                        "  04:00 — counts against the previous day  ",
+                        color = HealthyColors.Muted,
+                        fontSize = 10.sp,
+                    )
+                    HorizontalDivider(color = HealthyColors.Rule, modifier = Modifier.weight(1f))
+                }
+            }
             Row(
                 modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
                 verticalAlignment = Alignment.CenterVertically,

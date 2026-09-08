@@ -86,7 +86,17 @@ fun FoodScreen(
         contentPadding = PaddingValues(vertical = 14.dp),
     ) {
         item { com.healthy.app.ui.energy.EnergyCard(vm = energy) }
-        item { TotalsCard(state.totals, state.today.size, targetKcal) }
+        item {
+            TotalsCard(
+                totals = state.totals,
+                count = state.listed.size,
+                targetKcal = targetKcal,
+                dayLabel = com.healthy.app.core.LogWindow.label(
+                    com.healthy.app.core.LogWindow.Day(state.totalsDay),
+                    state.nowMillis,
+                ),
+            )
+        }
         item {
             NutrientCard(
                 today = state.totals,
@@ -146,16 +156,31 @@ fun FoodScreen(
 
         item {
             SectionCard {
-                Title("Eaten today")
-                if (state.today.isEmpty()) {
+                com.healthy.app.ui.components.WindowSelector(
+                    window = state.window,
+                    now = state.nowMillis,
+                    onChange = vm::setWindow,
+                )
+                Text(
+                    if (state.window is com.healthy.app.core.LogWindow.Rolling) {
+                        "Everything eaten in the last 24 hours. Step back to see or " +
+                            "correct an earlier day."
+                    } else {
+                        "One whole day, 04:00 to 04:00."
+                    },
+                    color = HealthyColors.Muted,
+                    fontSize = 11.sp,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
+                if (state.listed.isEmpty()) {
                     Text(
-                        "Nothing logged yet.",
+                        "Nothing logged in this window.",
                         color = HealthyColors.Muted,
                         fontSize = 13.sp,
                         modifier = Modifier.padding(top = 6.dp),
                     )
                 } else {
-                    state.today.forEach { item ->
+                    state.listed.forEach { item ->
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                             verticalAlignment = Alignment.CenterVertically,
@@ -228,9 +253,17 @@ private fun Long.asClock(): String =
     Instant.ofEpochMilli(this).atZone(ZoneId.systemDefault()).toLocalTime().format(HHMM)
 
 @Composable
-private fun TotalsCard(totals: Nutrition.Totals, count: Int, targetKcal: Int?) {
+private fun TotalsCard(
+    totals: Nutrition.Totals,
+    count: Int,
+    targetKcal: Int?,
+    dayLabel: String,
+) {
     SectionCard {
-        Title("Today", "$count item${if (count == 1) "" else "s"} logged.")
+        // Always a whole logical day, even while the list below is rolling:
+        // the energy target is a daily figure and a percentage of a rolling
+        // window would be a percentage of nothing in particular.
+        Title(dayLabel, "$count item${if (count == 1) "" else "s"} in the list below.")
         Row(
             modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
