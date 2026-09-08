@@ -58,6 +58,18 @@ object Sources {
                 "that definition changes between countries.",
         ),
         Entry(
+            item = "Daily fluid target",
+            value = "${com.healthy.app.data.HealthySettings.DEFAULT_FLUID_TARGET_ML} ml a day",
+            basis = "The default this app was specified with. It sits close to what " +
+                "EFSA calls adequate intake — 2.0 litres of total water a day for " +
+                "women, 2.5 for men — once the fifth or so that comes from food is " +
+                "taken off, leaving roughly 1.6 to 2.0 litres of drinks.",
+            limitation = "A round number, not a requirement, and not measured for " +
+                "you. Real need moves with heat, exercise and body size, and thirst " +
+                "tracks it better than any fixed figure. Change it in settings; " +
+                "nothing is sent when you are under it.",
+        ),
+        Entry(
             item = "Fluid caution level",
             value = "${SafeLimits.FLUID_CAUTION_ML} ml a day",
             basis = "Healthy kidneys clear roughly 0.8 to 1.0 litres an hour. This " +

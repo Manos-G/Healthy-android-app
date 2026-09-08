@@ -298,11 +298,15 @@ class FluidsViewModel(app: Application) : AndroidViewModel(app) {
      * asking the user to type again (spec 9.1 and 9.4). Every figure scales
      * with the amount, which is the reason the carousel exists — a 500 ml can
      * is not a 250 ml can with a different label.
+     *
+     * [minutesAgo] backdates it. That matters most for caffeine: a dose two
+     * hours old has already lost a quarter of itself, and stamping it as now
+     * pushes the curve, and the bedtime figure, too high.
      */
-    fun log(beverage: Beverage, amount: Int) {
+    fun log(beverage: Beverage, amount: Int, minutesAgo: Int = 0) {
         viewModelScope.launch {
             val settings = settingsStore.settings.first()
-            val now = System.currentTimeMillis()
+            val now = System.currentTimeMillis() - minutesAgo * 60_000L
             val fluid = beverage.fluidMlFor(amount)
             val row = Drink(
                 name = beverage.name,

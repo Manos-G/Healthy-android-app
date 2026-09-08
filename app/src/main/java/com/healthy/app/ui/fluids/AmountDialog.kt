@@ -36,10 +36,12 @@ fun AmountDialog(
     beverage: Beverage,
     mlPerUnit: Double = Alcohol.DEFAULT_ML_PER_UNIT,
     startMl: Int = beverage.defaultMl,
-    onConfirm: (Int) -> Unit,
+    onConfirm: (amount: Int, minutesAgo: Int) -> Unit,
     onDismiss: () -> Unit,
 ) {
     var amount by remember(beverage, startMl) { mutableIntStateOf(startMl) }
+    var minutesAgo by remember(beverage) { mutableIntStateOf(0) }
+    val now = remember(beverage) { System.currentTimeMillis() }
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
@@ -73,12 +75,18 @@ fun AmountDialog(
                     modifier = Modifier.padding(top = 14.dp),
                 )
 
+                com.healthy.app.ui.components.WhenPicker(
+                    minutesAgo = minutesAgo,
+                    now = now,
+                    modifier = Modifier.padding(top = 14.dp),
+                ) { minutesAgo = it }
+
                 Row(
                     Modifier.fillMaxWidth().padding(top = 10.dp),
                     horizontalArrangement = Arrangement.End,
                 ) {
                     TextButton(onClick = onDismiss) { Text("Cancel", color = HealthyColors.Muted) }
-                    TextButton(onClick = { onConfirm(amount) }) {
+                    TextButton(onClick = { onConfirm(amount, minutesAgo) }) {
                         Text("Log it", color = HealthyColors.Sleep)
                     }
                 }

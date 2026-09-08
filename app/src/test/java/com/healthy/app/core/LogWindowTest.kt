@@ -75,6 +75,22 @@ class LogWindowTest {
         assertNull(LogWindow.boundaryWithin(LogWindow.Day("2026-09-08"), now, zone))
     }
 
+    /**
+     * The Food tab crashed on open.
+     *
+     * Compose draws the initial state before the first flow emission, so the
+     * label was asked for a day that had not been computed yet — an empty
+     * string, straight into LocalDate.parse. A label helper that throws on an
+     * input it can be handed is a landmine, so it falls back to the raw text
+     * rather than taking the screen down.
+     */
+    @Test
+    fun `an unparseable day labels itself instead of throwing`() {
+        val now = at("2026-09-08T13:00:00")
+        assertEquals("", LogWindow.label(LogWindow.Day(""), now, zone))
+        assertEquals("not-a-date", LogWindow.label(LogWindow.Day("not-a-date"), now, zone))
+    }
+
     /** Just before 04:00 the whole rolling window sits inside one logical day. */
     @Test
     fun `there is no divider when the window holds no boundary`() {

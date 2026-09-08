@@ -133,9 +133,9 @@ fun FluidsScreen(
             beverage = drink,
             mlPerUnit = state.mlPerUnit,
             startMl = drink.defaultMl,
-            onConfirm = { amount ->
+            onConfirm = { amount, minutesAgo ->
                 picking = null
-                vm.log(drink, amount)
+                vm.log(drink, amount, minutesAgo)
             },
             onDismiss = { picking = null },
         )
@@ -305,7 +305,18 @@ private fun FluidCard(state: FluidsState) {
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.Bottom,
         ) {
-            Text("Fluid", color = HealthyColors.Paper, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "Fluid",
+                    color = HealthyColors.Paper,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                com.healthy.app.ui.sources.SourceLink(
+                    item = "Daily fluid target",
+                    modifier = Modifier.padding(start = 6.dp),
+                )
+            }
             Text(
                 "${state.totalMl} of ${state.fluidTargetMl} ml",
                 color = HealthyColors.Muted,

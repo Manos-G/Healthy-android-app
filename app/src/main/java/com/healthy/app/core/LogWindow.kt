@@ -86,7 +86,11 @@ sealed interface LogWindow {
                     when (window.date) {
                         today -> "Today, since 04:00"
                         HealthyDay.plusDays(today, -1) -> "Yesterday"
-                        else -> LocalDate.parse(window.date).format(LABEL)
+                        // A screen can compose before its first emission, so
+                        // this is reachable with a date that was never set.
+                        // Falling back beats taking the screen down.
+                        else -> runCatching { LocalDate.parse(window.date).format(LABEL) }
+                            .getOrDefault(window.date)
                     }
                 }
             }

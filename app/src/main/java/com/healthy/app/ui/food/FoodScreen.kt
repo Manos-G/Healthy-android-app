@@ -26,6 +26,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -233,15 +234,15 @@ fun FoodScreen(
         PortionDialog(
             product = product,
             targetKcal = targetKcal,
-            onLog = { grams, mealType -> vm.log(product, grams, mealType) },
+            onLog = { grams, mealType, minutesAgo -> vm.log(product, grams, mealType, minutesAgo) },
             onDismiss = vm::cancelPortion,
         )
     }
 
     if (manual) {
         ManualFoodDialog(
-            onSave = { name, kcal, protein, carbs, fat, fibre, grams, meal ->
-                vm.saveManualFood(name, kcal, protein, carbs, fat, fibre, grams, meal)
+            onSave = { name, kcal, protein, carbs, fat, fibre, grams, meal, minutesAgo ->
+                vm.saveManualFood(name, kcal, protein, carbs, fat, fibre, grams, meal, minutesAgo)
                 manual = false
             },
             onDismiss = { manual = false },
@@ -336,11 +337,13 @@ private fun Figure(label: String, value: String, unit: String, percent: Int? = n
 private fun PortionDialog(
     product: Product,
     targetKcal: Int?,
-    onLog: (Double, String) -> Unit,
+    onLog: (grams: Double, mealType: String, minutesAgo: Int) -> Unit,
     onDismiss: () -> Unit,
 ) {
     var weighed by remember { mutableStateOf("") }
     var mealType by remember { mutableStateOf(MealEntry.SNACK) }
+    var minutesAgo by remember { mutableIntStateOf(0) }
+    val now = remember { System.currentTimeMillis() }
     val options = Nutrition.portionsFor(product)
 
     Dialog(onDismissRequest = onDismiss) {
@@ -397,7 +400,7 @@ private fun PortionDialog(
                         share?.let { append(", $it% of today") }
                     }
                     OutlinedButton(
-                        onClick = { onLog(portion.grams, mealType) },
+                        onClick = { onLog(portion.grams, mealType, minutesAgo) },
                         modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
                         shape = RoundedCornerShape(10.dp),
                         border = BorderStroke(1.dp, HealthyColors.Rule),
@@ -427,7 +430,9 @@ private fun PortionDialog(
                         ),
                     )
                     TextButton(
-                        onClick = { weighed.toDoubleOrNull()?.let { onLog(it, mealType) } },
+                        onClick = {
+                            weighed.toDoubleOrNull()?.let { onLog(it, mealType, minutesAgo) }
+                        },
                         enabled = weighed.toDoubleOrNull()?.let { it > 0 } == true,
                     ) {
                         Text("Log", color = HealthyColors.Sleep)
@@ -453,6 +458,15 @@ private fun PortionDialog(
                     modifier = Modifier.padding(top = 8.dp),
                 )
 
+                // Spec 12.6 puts the gap between the last meal and sleep in the
+                // comparison table, so a dinner logged at bedtime rather than at
+                // dinner time does not just misplace a meal, it corrupts an input.
+                com.healthy.app.ui.components.WhenPicker(
+                    minutesAgo = minutesAgo,
+                    now = now,
+                    modifier = Modifier.padding(top = 12.dp),
+                ) { minutesAgo = it }
+
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                     TextButton(onClick = onDismiss) { Text("Cancel", color = HealthyColors.Muted) }
                 }
@@ -464,9 +478,11 @@ private fun PortionDialog(
 /** A food with no barcode: fruit, vegetables, bread from a bakery (spec 12.4). */
 @Composable
 private fun ManualFoodDialog(
-    onSave: (String, Double?, Double?, Double?, Double?, Double?, Double, String) -> Unit,
+    onSave: (String, Double?, Double?, Double?, Double?, Double?, Double, String, Int) -> Unit,
     onDismiss: () -> Unit,
 ) {
+    var minutesAgo by remember { mutableIntStateOf(0) }
+    val now = remember { System.currentTimeMillis() }
     var name by remember { mutableStateOf("") }
     var kcal by remember { mutableStateOf("") }
     var protein by remember { mutableStateOf("") }
@@ -512,6 +528,11 @@ private fun ManualFoodDialog(
                     Num("fibre", fibre, Modifier.weight(1f)) { fibre = it }
                     Num("ate, g", grams, Modifier.weight(1f)) { grams = it }
                 }
+                com.healthy.app.ui.components.WhenPicker(
+                    minutesAgo = minutesAgo,
+                    now = now,
+                    modifier = Modifier.padding(top = 12.dp),
+                ) { minutesAgo = it }
                 Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.End) {
                     TextButton(onClick = onDismiss) { Text("Cancel", color = HealthyColors.Muted) }
                     TextButton(
@@ -519,7 +540,7 @@ private fun ManualFoodDialog(
                             onSave(
                                 name, kcal.toDoubleOrNull(), protein.toDoubleOrNull(),
                                 carbs.toDoubleOrNull(), fat.toDoubleOrNull(), fibre.toDoubleOrNull(),
-                                grams.toDoubleOrNull() ?: 0.0, MealEntry.SNACK,
+                                grams.toDoubleOrNull() ?: 0.0, MealEntry.SNACK, minutesAgo,
                             )
                         },
                         enabled = name.isNotBlank() && (grams.toDoubleOrNull() ?: 0.0) > 0,

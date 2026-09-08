@@ -41,8 +41,13 @@ data class FoodState(
      */
     val totals: Nutrition.Totals = Nutrition.Totals(),
     val window: LogWindow = LogWindow.Rolling,
-    val totalsDay: String = "",
-    val nowMillis: Long = 0,
+    /**
+     * Real values in the defaults, because Compose draws this state once
+     * before the first emission arrives and a screen must not depend on
+     * never being shown an initial value.
+     */
+    val totalsDay: String = HealthyDay.today(),
+    val nowMillis: Long = System.currentTimeMillis(),
     val searchResults: List<Product> = emptyList(),
     /** The last seven logged days, for the mean beside today (spec 16.5). */
     val recentDays: List<Nutrition.Totals> = emptyList(),
@@ -147,9 +152,9 @@ class FoodViewModel(app: Application) : AndroidViewModel(app) {
      * Records a portion and mirrors it into Health Connect (spec 12.5), so
      * other apps can read what was eaten here.
      */
-    fun log(product: Product, grams: Double, mealType: String) {
+    fun log(product: Product, grams: Double, mealType: String, minutesAgo: Int = 0) {
         viewModelScope.launch {
-            val now = System.currentTimeMillis()
+            val now = System.currentTimeMillis() - minutesAgo * 60_000L
             meals.insert(
                 MealEntry(
                     timestamp = now,
@@ -182,6 +187,7 @@ class FoodViewModel(app: Application) : AndroidViewModel(app) {
         fibre100: Double?,
         grams: Double,
         mealType: String,
+        minutesAgo: Int = 0,
     ) {
         viewModelScope.launch {
             val product = Product(
@@ -196,7 +202,7 @@ class FoodViewModel(app: Application) : AndroidViewModel(app) {
                 source = Product.USER,
             )
             products.upsert(product)
-            log(product, grams, mealType)
+            log(product, grams, mealType, minutesAgo)
         }
     }
 
