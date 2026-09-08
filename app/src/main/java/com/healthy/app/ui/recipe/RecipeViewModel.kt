@@ -89,6 +89,43 @@ class RecipeViewModel(app: Application) : AndroidViewModel(app) {
     fun draftRawGrams(): Double = _draft.value.sumOf { it.grams }
 
     /**
+     * What the draft adds up to, and a sentence saying so.
+     *
+     * Resolved against the same product table the saved recipe will use, so
+     * the figure shown while building is the figure that will be stored. An
+     * ingredient with nothing behind it is named rather than quietly counted
+     * as nothing, which is the whole of the bug this answers.
+     */
+    suspend fun draftTotals(): Pair<Double, String> {
+        val items = _draft.value
+        if (items.isEmpty()) return 0.0 to ""
+        val products = db.productDao().allForExport().associateBy { it.barcode }
+        var totals = Nutrition.Totals()
+        val unknown = mutableListOf<String>()
+        for (item in items) {
+            val product = item.barcode?.let(products::get)
+            if (product?.kcal100 == null) {
+                unknown += item.name
+                continue
+            }
+            totals += Nutrition.forGrams(product, item.grams)
+        }
+        val grams = items.sumOf { it.grams }
+        val sentence = buildString {
+            append("${grams.toInt()} g of ingredients, ${totals.kcal.toInt()} kcal")
+            append(" · P ${totals.protein.toInt()} C ${totals.carbs.toInt()} F ${totals.fat.toInt()}")
+            if (unknown.isNotEmpty()) {
+                append(". No values for ")
+                append(unknown.distinct().joinToString(", "))
+                append(" — that part counts as zero.")
+            } else {
+                append(".")
+            }
+        }
+        return totals.kcal to sentence
+    }
+
+    /**
      * Saves a recipe (spec 13.3, 13.4).
      *
      * The cooked weight is required, not optional: without it every portion
@@ -162,6 +199,79 @@ class RecipeViewModel(app: Application) : AndroidViewModel(app) {
         _message.value = null
     }
 
-    suspend fun searchProducts(term: String): List<Product> =
-        db.productDao().allForExport().filter { it.name.contains(term, ignoreCase = true) }.take(20)
+    /**
+     * Ingredients to choose from: the built-in catalog and everything the user
+     * has scanned or typed before, in one list.
+     *
+     * The catalog is offered as [Product] so the picker has one kind of thing
+     * to show and the recipe has one kind of thing to store. A stored product
+     * of the same code wins, because that is either a correction the user made
+     * or a real package they scanned.
+     */
+    suspend fun searchIngredients(term: String): List<Product> {
+        val stored = db.productDao().allForExport().filter { it.kind == Product.KIND_FOOD }
+        val storedCodes = stored.map { it.barcode }.toSet()
+        val builtIn = com.healthy.app.core.IngredientCatalog.PRODUCTS
+            .filterNot { it.barcode in storedCodes }
+        val needle = term.trim()
+        val all = stored + builtIn
+        val matches = if (needle.isEmpty()) {
+            all
+        } else {
+            all.filter { it.name.contains(needle, ignoreCase = true) }
+        }
+        // Prefix first, so "ba" reaches Banana before Strawberries.
+        val (starts, rest) = matches.partition {
+            needle.isNotEmpty() && it.name.startsWith(needle, ignoreCase = true)
+        }
+        return (starts + rest).take(60)
+    }
+
+    /**
+     * Adds a chosen ingredient, storing the product first.
+     *
+     * A built-in ingredient has to exist in the `product` table before the
+     * recipe can point at it, or the resolver will look up its barcode and
+     * find nothing — which is the shape of the bug this fixes.
+     */
+    fun addIngredient(product: Product, grams: Double) {
+        viewModelScope.launch {
+            if (db.productDao().byBarcode(product.barcode) == null) {
+                db.productDao().upsert(product)
+            }
+            addDraftItem(DraftItem(product.name, grams, barcode = product.barcode))
+            refresh.value++
+        }
+    }
+
+    /** A food with no barcode and not in the catalog (spec 12.4). */
+    fun addManualIngredient(
+        name: String,
+        grams: Double,
+        kcal100: Double?,
+        protein100: Double?,
+        carbs100: Double?,
+        fat100: Double?,
+        fibre100: Double?,
+    ) {
+        viewModelScope.launch {
+            val product = Product(
+                barcode = Nutrition.manualBarcode(name),
+                kind = Product.KIND_FOOD,
+                name = name.trim(),
+                kcal100 = kcal100,
+                protein100 = protein100,
+                carbs100 = carbs100,
+                fat100 = fat100,
+                fibre100 = fibre100,
+                source = Product.USER,
+            )
+            db.productDao().upsert(product)
+            addDraftItem(DraftItem(product.name, grams, barcode = product.barcode))
+            refresh.value++
+        }
+    }
+
+    /** After a scan: the product is already stored, so only the weight is left. */
+    suspend fun productFor(barcode: String): Product? = db.productDao().byBarcode(barcode)
 }

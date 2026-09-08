@@ -1,5 +1,8 @@
 package com.healthy.app.ui.recipe
 
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -155,6 +158,21 @@ private fun RecipeRow(card: RecipeCard, targetKcal: Int?, vm: RecipeViewModel) {
             }
         }
 
+        // A recipe built before ingredients carried nutrition, or one whose
+        // product has since been deleted, reads as complete and is not. Saying
+        // which ingredients are blank is the difference between a wrong number
+        // and a number known to be short.
+        card.resolved?.unknownIngredients?.takeIf { it.isNotEmpty() }?.let { missing ->
+            Text(
+                "No values for " + missing.joinToString(", ") +
+                    ". Those count as zero, so this dish reads lower than it is. " +
+                    "Rebuild it and pick or scan each ingredient.",
+                color = HealthyColors.Warn,
+                fontSize = 11.sp,
+                modifier = Modifier.padding(top = 6.dp),
+            )
+        }
+
         if (sharing) {
             com.healthy.app.scan.QrShareDialog(
                 payload = com.healthy.app.scan.QrPayload.encode(card.recipe, card.items),
@@ -268,15 +286,35 @@ private fun BuilderDialog(draft: List<DraftItem>, vm: RecipeViewModel, onDone: (
     var name by remember { mutableStateOf("") }
     var cooked by remember { mutableStateOf("") }
     var portions by remember { mutableStateOf("4") }
-    var itemName by remember { mutableStateOf("") }
-    var itemGrams by remember { mutableStateOf("") }
+    var picking by remember { mutableStateOf(false) }
+
+    // The running total, recomputed whenever the draft changes. It reads the
+    // same products the resolver will, so what is shown while building is what
+    // the saved recipe will say.
+    var draftKcal by remember { mutableStateOf(0.0) }
+    var draftSummary by remember { mutableStateOf("") }
+    LaunchedEffect(draft) {
+        val totals = vm.draftTotals()
+        draftKcal = totals.first
+        draftSummary = totals.second
+    }
+
+    if (picking) {
+        IngredientPicker(vm = vm, onDismiss = { picking = false })
+        return
+    }
 
     androidx.compose.ui.window.Dialog(onDismissRequest = onDone) {
         Card(
             shape = RoundedCornerShape(16.dp),
             colors = CardDefaults.cardColors(containerColor = HealthyColors.Raised),
         ) {
-            Column(Modifier.padding(18.dp)) {
+            Column(
+                Modifier
+                    .padding(18.dp)
+                    .verticalScroll(androidx.compose.foundation.rememberScrollState())
+                    .imePadding(),
+            ) {
                 Text("Build a recipe", color = HealthyColors.Paper, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
                 OutlinedTextField(
                     value = name,
@@ -288,7 +326,8 @@ private fun BuilderDialog(draft: List<DraftItem>, vm: RecipeViewModel, onDone: (
                 )
 
                 Text(
-                    "Ingredients, weighed before cooking.",
+                    "Ingredients, weighed before cooking. Each one brings its own " +
+                        "calories and nutrients.",
                     color = HealthyColors.Muted,
                     fontSize = 11.sp,
                     modifier = Modifier.padding(top = 12.dp),
@@ -305,40 +344,28 @@ private fun BuilderDialog(draft: List<DraftItem>, vm: RecipeViewModel, onDone: (
                         }
                     }
                 }
-                Row(
-                    Modifier.fillMaxWidth().padding(top = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+                OutlinedButton(
+                    onClick = { picking = true },
+                    modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, HealthyColors.Rule),
+                    colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(
+                        containerColor = HealthyColors.Raised2,
+                        contentColor = HealthyColors.Paper,
+                    ),
                 ) {
-                    OutlinedTextField(
-                        value = itemName,
-                        onValueChange = { itemName = it },
-                        label = { Text("Ingredient", fontSize = 10.sp) },
-                        singleLine = true,
-                        modifier = Modifier.weight(1.4f),
-                        colors = recipeFieldColours(),
+                    Text("Add an ingredient", fontSize = 13.sp)
+                }
+
+                // What the dish adds up to so far. Zero here used to be the
+                // only outcome and nothing said so.
+                if (draft.isNotEmpty()) {
+                    Text(
+                        draftSummary,
+                        color = if (draftKcal > 0) HealthyColors.Sleep else HealthyColors.Warn,
+                        fontSize = 11.sp,
+                        modifier = Modifier.padding(top = 8.dp),
                     )
-                    OutlinedTextField(
-                        value = itemGrams,
-                        onValueChange = { v -> itemGrams = v.filter { it.isDigit() || it == '.' } },
-                        label = { Text("g", fontSize = 10.sp) },
-                        singleLine = true,
-                        modifier = Modifier.weight(0.8f),
-                        colors = recipeFieldColours(),
-                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
-                            keyboardType = KeyboardType.Decimal,
-                        ),
-                    )
-                    TextButton(
-                        onClick = {
-                            itemGrams.toDoubleOrNull()?.let { g ->
-                                vm.addDraftItem(DraftItem(itemName.ifBlank { "Ingredient" }, g))
-                                itemName = ""
-                                itemGrams = ""
-                            }
-                        },
-                        enabled = itemGrams.toDoubleOrNull() != null,
-                    ) { Text("Add", color = HealthyColors.Sleep, fontSize = 12.sp) }
                 }
 
                 HorizontalDivider(color = HealthyColors.Rule, modifier = Modifier.padding(vertical = 10.dp))
@@ -412,7 +439,7 @@ private fun SectionCard(content: @Composable ColumnScope.() -> Unit) {
 }
 
 @Composable
-private fun recipeFieldColours() = OutlinedTextFieldDefaults.colors(
+internal fun recipeFieldColours() = OutlinedTextFieldDefaults.colors(
     focusedTextColor = HealthyColors.Paper,
     unfocusedTextColor = HealthyColors.Paper,
     focusedBorderColor = HealthyColors.Sleep,

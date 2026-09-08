@@ -157,4 +157,55 @@ class RecipesTest {
         // A quarter of the dish is a quarter of its energy.
         assertEquals(4050.0 / 4, Recipes.nutrientsFor(resolved, portion.grams).kcal, 0.01)
     }
+
+    /**
+     * Reported as an issue: a recipe built by typing ingredient names came out
+     * at zero calories. An item with neither a product nor a child recipe
+     * behind it is a label and a weight, and the resolver skipped it in
+     * silence — so the dish looked finished and was empty.
+     *
+     * It still cannot invent nutrients, but it must now say which ingredients
+     * it could not account for.
+     */
+    @Test
+    fun `an ingredient that is only a name is reported, not silently skipped`() {
+        val recipe = Recipe(id = 1, name = "Pancakes", cookedGrams = 500.0, portions = 4)
+        val items = listOf(
+            RecipeItem(recipeId = 1, name = "flour", grams = 200.0),
+            RecipeItem(recipeId = 1, name = "eggs", grams = 100.0),
+        )
+        val resolved = Recipes.resolve(recipe, items, emptyMap()).getOrThrow()
+        assertEquals(0.0, resolved.totals.kcal, 0.01)
+        assertEquals(listOf("flour", "eggs"), resolved.unknownIngredients)
+    }
+
+    /** The same recipe, once the ingredients carry real values. */
+    @Test
+    fun `ingredients from the catalog give the dish real numbers`() {
+        val flour = com.healthy.app.core.IngredientCatalog.ALL
+            .first { it.name == "Flour, plain" }.toProduct()
+        val egg = com.healthy.app.core.IngredientCatalog.ALL
+            .first { it.name == "Egg, whole" }.toProduct()
+        val recipe = Recipe(id = 1, name = "Pancakes", cookedGrams = 500.0, portions = 4)
+        val items = listOf(
+            RecipeItem(recipeId = 1, barcode = flour.barcode, name = flour.name, grams = 200.0),
+            RecipeItem(recipeId = 1, barcode = egg.barcode, name = egg.name, grams = 100.0),
+        )
+        val products = mapOf(flour.barcode to flour, egg.barcode to egg)
+        val resolved = Recipes.resolve(recipe, items, products).getOrThrow()
+
+        // 200 g flour at 364 kcal/100 g, plus 100 g egg at 143.
+        assertEquals(871.0, resolved.totals.kcal, 0.5)
+        assertEquals(174.2, resolved.per100g.kcal, 0.5)
+        assertTrue(resolved.unknownIngredients.isEmpty())
+    }
+
+    /** A barcode whose product has since been deleted must not read as complete. */
+    @Test
+    fun `an ingredient whose product is missing is reported too`() {
+        val recipe = Recipe(id = 1, name = "Stew", cookedGrams = 800.0, portions = 4)
+        val items = listOf(RecipeItem(recipeId = 1, barcode = "gone", name = "beef", grams = 300.0))
+        val resolved = Recipes.resolve(recipe, items, emptyMap()).getOrThrow()
+        assertEquals(listOf("beef"), resolved.unknownIngredients)
+    }
 }

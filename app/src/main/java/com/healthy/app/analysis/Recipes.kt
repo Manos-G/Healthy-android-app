@@ -25,6 +25,15 @@ object Recipes {
         val ingredientGrams: Double,
         /** Water lost or absorbed: cooked weight less raw weight. */
         val weightChangeGrams: Double,
+        /**
+         * Ingredients that contributed weight but no nutrients.
+         *
+         * Reported because the alternative was silence: an ingredient with no
+         * product behind it was skipped, so a whole recipe could total zero
+         * calories with nothing on screen to say why. A dish is only as
+         * complete as this list is empty.
+         */
+        val unknownIngredients: List<String> = emptyList(),
     )
 
     sealed interface Problem {
@@ -66,23 +75,36 @@ object Recipes {
 
         var totals = Nutrition.Totals()
         var rawGrams = 0.0
+        val unknown = mutableListOf<String>()
 
         for (item in items) {
             rawGrams += item.grams
             when {
                 item.barcode != null -> {
-                    val product = products[item.barcode] ?: continue
+                    val product = products[item.barcode]
+                    if (product == null) {
+                        unknown += item.name
+                        continue
+                    }
+                    if (product.kcal100 == null) unknown += item.name
                     totals += Nutrition.forGrams(product, item.grams)
                 }
 
-                item.childRecipeId != null -> {
+                // Neither a product nor a child recipe: a name and a weight,
+                // which is what the free-text ingredient box used to produce.
+                item.childRecipeId == null -> unknown += item.name
+
+                else -> {
                     if (depth >= MAX_DEPTH) {
                         return Result.failure(RecipeError(Problem.TooDeep(recipe.name)))
                     }
                     if (item.childRecipeId == recipe.id) {
                         return Result.failure(RecipeError(Problem.Circular(recipe.name)))
                     }
-                    val (child, childItems) = childRecipes[item.childRecipeId] ?: continue
+                    val (child, childItems) = childRecipes[item.childRecipeId] ?: run {
+                        unknown += item.name
+                        continue
+                    }
                     val resolvedChild = resolve(
                         recipe = child,
                         items = childItems,
@@ -104,6 +126,7 @@ object Recipes {
                 per100g = scale(totals, 100.0 / recipe.cookedGrams),
                 ingredientGrams = rawGrams,
                 weightChangeGrams = recipe.cookedGrams - rawGrams,
+                unknownIngredients = unknown.distinct(),
             )
         )
     }
