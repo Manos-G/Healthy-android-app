@@ -42,6 +42,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.healthy.app.analysis.Energy
 import com.healthy.app.analysis.Recipes
+import com.healthy.app.data.entity.Product
 import com.healthy.app.ui.theme.HealthyColors
 
 /**
@@ -174,8 +175,17 @@ private fun RecipeRow(card: RecipeCard, targetKcal: Int?, vm: RecipeViewModel) {
         }
 
         if (sharing) {
+            // The ingredients' own values travel with the recipe, or the other
+            // phone receives a list of barcodes it has never seen and the dish
+            // resolves to nothing.
+            var shareProducts by remember { mutableStateOf<Map<String, Product>>(emptyMap()) }
+            LaunchedEffect(card.recipe.id) { shareProducts = vm.productsFor(card.items) }
             com.healthy.app.scan.QrShareDialog(
-                payload = com.healthy.app.scan.QrPayload.encode(card.recipe, card.items),
+                payload = com.healthy.app.scan.QrPayload.encode(
+                    card.recipe,
+                    card.items,
+                    shareProducts,
+                ),
                 title = card.recipe.name,
                 onDismiss = { sharing = false },
             )

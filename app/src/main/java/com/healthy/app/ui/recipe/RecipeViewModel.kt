@@ -272,6 +272,14 @@ class RecipeViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** The products a recipe's items point at, for sharing them alongside it. */
+    suspend fun productsFor(items: List<RecipeItem>): Map<String, Product> {
+        val codes = items.mapNotNull { it.barcode }.toSet()
+        if (codes.isEmpty()) return emptyMap()
+        return db.productDao().allForExport().filter { it.barcode in codes }
+            .associateBy { it.barcode }
+    }
+
     /** After a scan: the product is already stored, so only the weight is left. */
     suspend fun productFor(barcode: String): Product? = db.productDao().byBarcode(barcode)
 }

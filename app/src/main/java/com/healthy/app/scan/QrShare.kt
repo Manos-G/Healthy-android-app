@@ -37,6 +37,7 @@ import com.journeyapps.barcodescanner.ScanOptions
  */
 @Composable
 fun QrShareDialog(payload: String, title: String, onDismiss: () -> Unit) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     val bitmap: Bitmap? = remember(payload) {
         runCatching {
             BarcodeEncoder().encodeBitmap(payload, BarcodeFormat.QR_CODE, QR_PIXELS, QR_PIXELS)
@@ -73,8 +74,23 @@ fun QrShareDialog(payload: String, title: String, onDismiss: () -> Unit) {
                         fontSize = 12.sp,
                     )
                 }
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                    TextButton(onClick = onDismiss) { Text("Done", color = HealthyColors.Sleep) }
+                Text(
+                    "In the same room, they scan the square. Otherwise send it — the " +
+                        "link carries the whole thing, and opening it adds it to their " +
+                        "app. It goes through no server of ours.",
+                    color = HealthyColors.Muted,
+                    fontSize = 11.sp,
+                    modifier = Modifier.padding(top = 12.dp),
+                )
+                Row(
+                    Modifier.fillMaxWidth().padding(top = 8.dp),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    TextButton(onClick = { shareItem(context, payload, title, bitmap) }) {
+                        Text("Send", color = HealthyColors.Sleep)
+                    }
+                    TextButton(onClick = onDismiss) { Text("Done", color = HealthyColors.Muted) }
                 }
             }
         }
@@ -91,7 +107,8 @@ fun QrReceiveButton(
     modifier: Modifier = Modifier,
 ) {
     val scanner = rememberLauncherForActivityResult(ScanContract()) { result ->
-        result.contents?.let { onDecoded(QrPayload.decode(it)) }
+        // decodeAny, so a square and a pasted link both work.
+        result.contents?.let { onDecoded(QrPayload.decodeAny(it)) }
     }
     TextButton(
         onClick = {
@@ -108,6 +125,56 @@ fun QrReceiveButton(
     ) {
         Text("Receive a shared item", color = HealthyColors.Sleep, fontSize = 13.sp)
     }
+}
+
+/**
+ * Hands the item to whatever the user shares with — Messenger, WhatsApp, mail.
+ *
+ * The text carries a link that holds the whole item, because a QR code is
+ * useless through a chat: the square arrives on the reader's own screen and a
+ * phone cannot scan itself. The image goes along too, for the case where they
+ * are sitting together and one of them scans the other's screen.
+ *
+ * Written to the app's own cache and handed over through a FileProvider, so
+ * the other app gets a one-time grant rather than a world-readable file.
+ */
+private fun shareItem(
+    context: android.content.Context,
+    payload: String,
+    title: String,
+    bitmap: Bitmap?,
+) {
+    val link = QrPayload.toLink(payload)
+    val message = "$title — a recipe from Healthy.\n\n$link\n\n" +
+        "Open the link with Healthy installed and it is added to yours. " +
+        "The link holds the recipe itself; it is not fetched from anywhere."
+
+    val imageUri = bitmap?.let { runCatching { cacheQr(context, it, title) }.getOrNull() }
+
+    val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+        putExtra(android.content.Intent.EXTRA_TEXT, message)
+        putExtra(android.content.Intent.EXTRA_SUBJECT, title)
+        if (imageUri != null) {
+            type = "image/png"
+            putExtra(android.content.Intent.EXTRA_STREAM, imageUri)
+            addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        } else {
+            type = "text/plain"
+        }
+    }
+    context.startActivity(android.content.Intent.createChooser(intent, "Send $title"))
+}
+
+private fun cacheQr(context: android.content.Context, bitmap: Bitmap, title: String): android.net.Uri {
+    val dir = java.io.File(context.cacheDir, "shared").apply { mkdirs() }
+    val safe = title.lowercase().map { if (it.isLetterOrDigit()) it else '-' }.joinToString("")
+    val file = java.io.File(dir, "healthy-$safe.png")
+    file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+    return androidx.core.content.FileProvider.getUriForFile(
+        context,
+        context.packageName + ".shared",
+        file,
+    )
 }
 
 private const val QR_PIXELS = 640

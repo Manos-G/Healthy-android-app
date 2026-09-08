@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Only the one directory the share sheet writes QR images into. Nothing else
+    in the app's storage is reachable through the provider, and the database is
+    nowhere near it.
+-->
+<paths>
+    <cache-path name="shared" path="shared/" />
+</paths>

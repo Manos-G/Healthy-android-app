@@ -22,13 +22,20 @@ class MainActivity : ComponentActivity() {
     private val nightRequest = mutableStateOf<NightRequest?>(null)
     private var requestCount = 0
 
+    /** A recipe or food arriving as a link someone sent through a messenger. */
+    private val sharedItem = mutableStateOf<SharedRequest?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         nightRequest.value = requestFrom(intent)
+        sharedItem.value = sharedFrom(intent)
         setContent {
             HealthyTheme {
-                HealthyApp(openNight = nightRequest.value)
+                HealthyApp(
+                    openNight = nightRequest.value,
+                    shared = sharedItem.value,
+                )
             }
         }
     }
@@ -41,6 +48,20 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         nightRequest.value = requestFrom(intent)
+        sharedFrom(intent)?.let { sharedItem.value = it }
+    }
+
+    /**
+     * The whole item travels in the link's fragment, so nothing is fetched and
+     * the host never has to exist. A link that is not ours decodes to
+     * [com.healthy.app.scan.QrPayload.Decoded.NotOurs] and says so on screen
+     * rather than failing silently.
+     */
+    private fun sharedFrom(intent: android.content.Intent?): SharedRequest? {
+        if (intent?.action != android.content.Intent.ACTION_VIEW) return null
+        val link = intent.dataString ?: return null
+        val payload = com.healthy.app.scan.QrPayload.fromLink(link) ?: return null
+        return SharedRequest(com.healthy.app.scan.QrPayload.decode(payload), ++requestCount)
     }
 
     private fun requestFrom(intent: android.content.Intent?): NightRequest? =
@@ -51,3 +72,9 @@ class MainActivity : ComponentActivity() {
 
 /** A request to open one night, distinct on every delivery. */
 data class NightRequest(val date: String, val token: Int)
+
+/** An item someone shared, distinct on every delivery so a repeat tap works. */
+data class SharedRequest(
+    val decoded: com.healthy.app.scan.QrPayload.Decoded,
+    val token: Int,
+)

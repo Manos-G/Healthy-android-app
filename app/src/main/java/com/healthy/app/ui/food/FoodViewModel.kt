@@ -222,8 +222,27 @@ class FoodViewModel(app: Application) : AndroidViewModel(app) {
                 }
 
                 is com.healthy.app.scan.QrPayload.Decoded.Dish -> {
+                    // The ingredients first. Saving the recipe alone would
+                    // leave it pointing at barcodes this phone has never seen,
+                    // and it would read as zero calories.
+                    decoded.products.forEach { product ->
+                        if (products.byBarcode(product.barcode) == null) products.upsert(product)
+                    }
                     db.recipeDao().saveRecipe(decoded.recipe, decoded.items)
-                    _shareMessage.value = "Added the recipe ${decoded.recipe.name}."
+
+                    val known = decoded.items.mapNotNull { it.barcode }.toSet()
+                    val missing = decoded.items.count {
+                        it.barcode == null || it.barcode !in known
+                    }
+                    _shareMessage.value = buildString {
+                        append("Added the recipe “${decoded.recipe.name}”")
+                        append(" with ${decoded.items.size} ingredient")
+                        if (decoded.items.size != 1) append("s")
+                        append(". It is in your recipes now.")
+                        if (missing > 0) {
+                            append(" $missing of them arrived without values.")
+                        }
+                    }
                 }
 
                 is com.healthy.app.scan.QrPayload.Decoded.NotOurs ->

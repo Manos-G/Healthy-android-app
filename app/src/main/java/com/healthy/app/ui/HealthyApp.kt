@@ -55,7 +55,10 @@ private enum class Tab(val label: String, val icon: ImageVector) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HealthyApp(openNight: com.healthy.app.NightRequest? = null) {
+fun HealthyApp(
+    openNight: com.healthy.app.NightRequest? = null,
+    shared: com.healthy.app.SharedRequest? = null,
+) {
     var tab by remember { mutableStateOf(Tab.Fluids) }
 
     // A notification tap opens the morning screen at that night, never the
@@ -64,6 +67,20 @@ fun HealthyApp(openNight: com.healthy.app.NightRequest? = null) {
         if (openNight != null) tab = Tab.Morning
     }
     val snackbars = remember { SnackbarHostState() }
+
+    /*
+     * A shared link lands on the Food tab, because that is where recipes and
+     * foods live and where the result of the import is visible. The same view
+     * model instance receives it, so the message it sets is the one that
+     * screen shows.
+     */
+    val foodVm = androidx.lifecycle.viewmodel.compose.viewModel<com.healthy.app.ui.food.FoodViewModel>()
+    androidx.compose.runtime.LaunchedEffect(shared) {
+        if (shared != null) {
+            tab = Tab.Food
+            foodVm.receiveShared(shared.decoded)
+        }
+    }
 
     Scaffold(
         containerColor = HealthyColors.Ground,
@@ -121,6 +138,7 @@ fun HealthyApp(openNight: com.healthy.app.NightRequest? = null) {
             )
             Tab.Food -> com.healthy.app.ui.food.FoodScreen(
                 modifier = Modifier.fillMaxSize().padding(padding),
+                vm = foodVm,
             )
             Tab.Weight -> WeightScreen(
                 modifier = Modifier.fillMaxSize().padding(padding),

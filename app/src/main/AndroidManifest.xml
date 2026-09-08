@@ -74,7 +74,41 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+
+            <!--
+              A shared recipe or food arriving as a link from a messenger.
+
+              The whole item is in the fragment after the #, which a browser
+              never sends to a server; nothing is fetched from healthy.app and
+              the host does not have to exist. This is on the launcher activity
+              only. Declaring the same filter twice is what once sent Health
+              Connect to the system chooser instead of our screen.
+
+              Not autoVerify: without a published assetlinks file Android would
+              hand the link to a browser, and an unverified filter at least
+              offers Healthy in the chooser.
+            -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="healthy.app" android:pathPrefix="/i" />
+            </intent-filter>
         </activity>
+
+        <!--
+          Hands a QR image to the share sheet without making it readable by
+          every app on the phone. Only the one cache directory is exposed.
+        -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.shared"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/shared_paths" />
+        </provider>
 
         <!--
           Health Connect refuses an app with no rationale screen (spec 3.2).
