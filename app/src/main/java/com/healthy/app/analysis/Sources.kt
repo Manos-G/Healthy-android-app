@@ -1,6 +1,8 @@
 package com.healthy.app.analysis
 
+import com.healthy.app.core.Alcohol
 import com.healthy.app.core.Caffeine
+import com.healthy.app.core.SafeLimits
 
 /**
  * The basis of every number the app shows (spec 17).
@@ -34,6 +36,35 @@ object Sources {
             value = "${Caffeine.DEFAULT_BEDTIME_LIMIT_MG} mg",
             basis = "A rule of thumb in common use.",
             limitation = "It is not measured for you. If caffeine hits you hard, lower it.",
+        ),
+        Entry(
+            item = "Daily caffeine limit",
+            value = "${SafeLimits.CAFFEINE_DAILY_MG} mg a day",
+            basis = "EFSA's 2015 opinion and the US FDA both put habitual intake " +
+                "for a healthy adult at this figure. EFSA adds ${SafeLimits.CAFFEINE_SINGLE_DOSE_MG} mg " +
+                "as a single dose.",
+            limitation = "A population figure, not a measurement of you. It says " +
+                "nothing about timing, and timing is what decides whether caffeine " +
+                "reaches your bedtime — that is the separate line on the curve.",
+        ),
+        Entry(
+            item = "Weekly alcohol limit",
+            value = "${SafeLimits.ALCOHOL_WEEKLY_UNITS.toInt()} units a week",
+            basis = "The UK Chief Medical Officers' guideline, which also says to " +
+                "spread it across three days or more rather than save it up.",
+            limitation = "There is no amount known to be free of risk; this is the " +
+                "level below which the risk is described as low. One unit is " +
+                "${Alcohol.DEFAULT_ML_PER_UNIT.toInt()} ml of pure alcohol here, and " +
+                "that definition changes between countries.",
+        ),
+        Entry(
+            item = "Fluid caution level",
+            value = "${SafeLimits.FLUID_CAUTION_ML} ml a day",
+            basis = "Healthy kidneys clear roughly 0.8 to 1.0 litres an hour. This " +
+                "is the point past which more water stops helping.",
+            limitation = "Not a danger line. Water intoxication needs far more, far " +
+                "faster, and usually heavy sweating with no salt replaced. Your own " +
+                "need rises with heat and exercise.",
         ),
         Entry(
             item = "Weight smoothing factor",

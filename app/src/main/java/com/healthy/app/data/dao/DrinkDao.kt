@@ -50,6 +50,16 @@ interface DrinkDao {
     @Query("SELECT COALESCE(SUM(mg), 0) FROM drink WHERE timestamp >= :from AND timestamp < :to")
     suspend fun totalMg(from: Long, to: Long): Int
 
+    /**
+     * Alcohol across a window. Shown for the week rather than the day because
+     * the guideline behind it is stated for the week (see SafeLimits).
+     */
+    @Query(
+        "SELECT COALESCE(SUM(alcoholUnits), 0) FROM drink " +
+            "WHERE timestamp >= :from AND timestamp < :to"
+    )
+    fun observeAlcoholUnits(from: Long, to: Long): Flow<Double>
+
     /** Fluid from caffeinated drinks. One tap logs both (spec 9.1). */
     @Query("SELECT COALESCE(SUM(volumeMl), 0) FROM drink WHERE timestamp >= :from AND timestamp < :to")
     fun observeVolumeMl(from: Long, to: Long): Flow<Int>

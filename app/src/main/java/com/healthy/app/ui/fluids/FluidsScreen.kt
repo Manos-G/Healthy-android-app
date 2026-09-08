@@ -41,6 +41,7 @@ import androidx.compose.runtime.setValue
 import com.healthy.app.core.Alcohol
 import com.healthy.app.core.Beverage
 import com.healthy.app.core.BeverageCategory
+import com.healthy.app.core.SafeLimits
 import com.healthy.app.data.entity.Drink
 import com.healthy.app.data.entity.Night
 import com.healthy.app.ui.components.RatingScale
@@ -96,8 +97,8 @@ fun FluidsScreen(
             item {
                 CategoryCard(
                     category = category,
+                    state = state,
                     recent = state.recent[category].orEmpty(),
-                    mlPerUnit = state.mlPerUnit,
                     onPick = { picking = it },
                     onBrowse = { browsing = category },
                 )
@@ -356,11 +357,12 @@ private fun FluidCard(state: FluidsState) {
 @Composable
 private fun CategoryCard(
     category: BeverageCategory,
+    state: FluidsState,
     recent: List<Beverage>,
-    mlPerUnit: Double,
     onPick: (Beverage) -> Unit,
     onBrowse: () -> Unit,
 ) {
+    val mlPerUnit = state.mlPerUnit
     val shown = remember(category, recent) {
         if (recent.isNotEmpty()) recent else starters(category)
     }
@@ -381,6 +383,9 @@ private fun CategoryCard(
                 Text("All drinks", color = HealthyColors.Sleep, fontSize = 12.sp)
             }
         }
+
+        LimitBar(category, state)
+
         Text(
             if (recent.isEmpty()) {
                 "Nothing logged here yet. These are a start; your last five appear " +
@@ -429,6 +434,93 @@ private fun CategoryCard(
         }
     }
 }
+
+/**
+ * Where the day stands against the published guideline for this category.
+ *
+ * These are intake figures, so they are drawn against a running total and not
+ * on the caffeine curve — that curve plots milligrams still circulating, and a
+ * daily intake limit has no meaning on that axis. Mixing the two would be the
+ * same class of error as reading a speed off an odometer.
+ *
+ * Never coloured red and never notified (spec 12.1, 16.5). Past the line the
+ * bar simply says so.
+ */
+@Composable
+private fun LimitBar(category: BeverageCategory, state: FluidsState) {
+    val spec = when (category) {
+        BeverageCategory.Caffeine -> LimitSpec(
+            value = state.totalMg.toDouble(),
+            limit = SafeLimits.CAFFEINE_DAILY_MG.toDouble(),
+            reading = "${state.totalMg} of ${SafeLimits.CAFFEINE_DAILY_MG} mg today",
+            over = "Past ${SafeLimits.CAFFEINE_DAILY_MG} mg for the day. Bedtime is the " +
+                "line that decides your sleep, and it is on the curve above.",
+            source = "Daily caffeine limit",
+            colour = HealthyColors.Caffeine,
+        )
+
+        BeverageCategory.Alcohol -> LimitSpec(
+            value = state.weekAlcoholUnits,
+            limit = SafeLimits.ALCOHOL_WEEKLY_UNITS,
+            reading = "${"%.1f".format(state.weekAlcoholUnits)} of " +
+                "${SafeLimits.ALCOHOL_WEEKLY_UNITS.toInt()} units this week",
+            over = "Past ${SafeLimits.ALCOHOL_WEEKLY_UNITS.toInt()} units for the week. " +
+                "The guideline is a week, not a day, so this resets seven days after " +
+                "each drink rather than at midnight.",
+            source = "Weekly alcohol limit",
+            colour = HealthyColors.Warn,
+        )
+
+        BeverageCategory.Water -> LimitSpec(
+            value = state.totalMl.toDouble(),
+            limit = SafeLimits.FLUID_CAUTION_ML.toDouble(),
+            reading = "${state.totalMl} ml today. Target ${state.fluidTargetMl}, " +
+                "and past ${SafeLimits.FLUID_CAUTION_ML} more stops helping.",
+            over = "Past ${SafeLimits.FLUID_CAUTION_ML} ml. More water is doing nothing " +
+                "useful now unless you have been sweating hard.",
+            source = "Fluid caution level",
+            colour = HealthyColors.Sleep,
+        )
+    }
+
+    val past = SafeLimits.exceeded(spec.value, spec.limit)
+
+    Column(Modifier.padding(bottom = 10.dp)) {
+        androidx.compose.material3.LinearProgressIndicator(
+            progress = { SafeLimits.fraction(spec.value, spec.limit) },
+            modifier = Modifier.fillMaxWidth().height(5.dp),
+            color = spec.colour,
+            trackColor = HealthyColors.Raised2,
+            strokeCap = androidx.compose.ui.graphics.StrokeCap.Round,
+            gapSize = 0.dp,
+            drawStopIndicator = {},
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                if (past) spec.over else spec.reading,
+                color = if (past) spec.colour else HealthyColors.Muted,
+                fontSize = 11.sp,
+                modifier = Modifier.weight(1f),
+            )
+            com.healthy.app.ui.sources.SourceLink(
+                item = spec.source,
+                modifier = Modifier.padding(start = 6.dp),
+            )
+        }
+    }
+}
+
+private data class LimitSpec(
+    val value: Double,
+    val limit: Double,
+    val reading: String,
+    val over: String,
+    val source: String,
+    val colour: androidx.compose.ui.graphics.Color,
+)
 
 /** The button's second line: what one of these does, at the size shown. */
 private fun badge(drink: Beverage, mlPerUnit: Double): String {

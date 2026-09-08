@@ -56,6 +56,8 @@ data class FluidsState(
     /** The user's own drinks, offered in every category's search. */
     val custom: List<Beverage> = emptyList(),
     val mlPerUnit: Double = Alcohol.DEFAULT_ML_PER_UNIT,
+    /** Seven logical days including today, against the weekly guideline. */
+    val weekAlcoholUnits: Double = 0.0,
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -121,7 +123,8 @@ class FluidsViewModel(app: Application) : AndroidViewModel(app) {
                 combine(
                     drinks.observeDecayWindow(dayStart - lookback, dayEnd),
                     recentByCategory(),
-                ) { all, recent ->
+                    drinks.observeAlcoholUnits(dayStart - WEEK_MILLIS + DAY_MILLIS, dayEnd),
+                ) { all, recent, weekUnits ->
                     build(
                         now = now,
                         settings = settings,
@@ -130,6 +133,7 @@ class FluidsViewModel(app: Application) : AndroidViewModel(app) {
                         all = all,
                         dayStart = dayStart,
                         dayEnd = dayEnd,
+                        weekAlcoholUnits = weekUnits,
                     )
                 }
             }
@@ -205,6 +209,7 @@ class FluidsViewModel(app: Application) : AndroidViewModel(app) {
         all: List<Drink>,
         dayStart: Long,
         dayEnd: Long,
+        weekAlcoholUnits: Double,
     ): FluidsState {
         val bedtimeMillis = nextBedtime(now, settings.targetBedtime)
         val bedtimeMg = Caffeine.levelAt(all, bedtimeMillis, settings.halfLifeHours)
@@ -235,6 +240,7 @@ class FluidsViewModel(app: Application) : AndroidViewModel(app) {
             recent = recent,
             custom = custom,
             mlPerUnit = settings.mlPerAlcoholUnit,
+            weekAlcoholUnits = weekAlcoholUnits,
         )
     }
 
@@ -303,6 +309,7 @@ class FluidsViewModel(app: Application) : AndroidViewModel(app) {
 
     private companion object {
         const val DAY_MILLIS = 24 * 60 * 60 * 1000L
+        const val WEEK_MILLIS = 7 * DAY_MILLIS
         const val MILLIS_PER_HOUR = 3_600_000.0
         /** Spec 5.2 asks for energy "at approximately 15:00". */
         const val ENERGY_PROMPT_HOUR = 15
