@@ -31,8 +31,11 @@ android {
         applicationId = "com.healthy.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.0.1"
+        // Bumped together, always. Android and Obtainium both decide "is
+        // this an update" from versionCode alone; a new name with the old
+        // number installs on nobody's phone.
+        versionCode = 2
+        versionName = "0.0.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
