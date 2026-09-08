@@ -260,7 +260,10 @@ private fun RecipeRow(card: RecipeCard, targetKcal: Int?, vm: RecipeViewModel) {
             )
             Row {
                 TextButton(onClick = { sharing = true }) {
-                    Text("Share as QR", color = HealthyColors.Sleep, fontSize = 12.sp)
+                    // Not "Share as QR" any more: the same button now also
+                    // sends a link, and naming it after one of the two ways
+                    // hid the other.
+                    Text("Share", color = HealthyColors.Sleep, fontSize = 12.sp)
                 }
                 TextButton(onClick = { vm.delete(card) }) {
                     Text("Delete recipe", color = HealthyColors.Warn, fontSize = 12.sp)

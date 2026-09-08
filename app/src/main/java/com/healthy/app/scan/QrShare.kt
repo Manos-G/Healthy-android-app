@@ -55,7 +55,9 @@ fun QrShareDialog(payload: String, title: String, onDismiss: () -> Unit) {
             ) {
                 Text(title, color = HealthyColors.Paper, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
                 Text(
-                    "Point another phone's Healthy scanner at this. Nothing is uploaded.",
+                    "Together in one room: they open Healthy and scan this square. " +
+                        "Anywhere else: Send to a friend, and pick Messenger, WhatsApp " +
+                        "or anything else. Nothing is uploaded either way.",
                     color = HealthyColors.Muted,
                     fontSize = 12.sp,
                     modifier = Modifier.padding(top = 6.dp, bottom = 12.dp),
@@ -75,9 +77,9 @@ fun QrShareDialog(payload: String, title: String, onDismiss: () -> Unit) {
                     )
                 }
                 Text(
-                    "In the same room, they scan the square. Otherwise send it — the " +
-                        "link carries the whole thing, and opening it adds it to their " +
-                        "app. It goes through no server of ours.",
+                    "The message carries the recipe itself, not a reference to it, so " +
+                        "opening it adds the whole thing — ingredients and their values " +
+                        "included. It passes through no server of ours.",
                     color = HealthyColors.Muted,
                     fontSize = 11.sp,
                     modifier = Modifier.padding(top = 12.dp),
@@ -88,7 +90,7 @@ fun QrShareDialog(payload: String, title: String, onDismiss: () -> Unit) {
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     TextButton(onClick = { shareItem(context, payload, title, bitmap) }) {
-                        Text("Send", color = HealthyColors.Sleep)
+                        Text("Send to a friend", color = HealthyColors.Sleep)
                     }
                     TextButton(onClick = onDismiss) { Text("Done", color = HealthyColors.Muted) }
                 }
