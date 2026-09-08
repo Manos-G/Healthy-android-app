@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.healthy.app.analysis.Energy
 import com.healthy.app.analysis.IntakeHistory
+import com.healthy.app.analysis.Nutrition
 import com.healthy.app.analysis.WeightTrend
 import com.healthy.app.core.HealthyDay
 import com.healthy.app.data.HealthyDatabase
@@ -16,6 +17,8 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -53,12 +56,56 @@ class EnergyViewModel(app: Application) : AndroidViewModel(app) {
     private val _message = MutableStateFlow<String?>(null)
     private val recomputed = MutableStateFlow(0)
 
+    /**
+     * The logical day, re-checked on a slow tick.
+     *
+     * `distinctUntilChanged` means the queries downstream restart only when
+     * the day actually rolls at 04:00, so the cost of the tick is a string
+     * comparison a minute and nothing else.
+     */
+    private val day: kotlinx.coroutines.flow.Flow<String> = kotlinx.coroutines.flow.flow {
+        while (true) {
+            emit(HealthyDay.today())
+            kotlinx.coroutines.delay(60_000)
+        }
+    }.distinctUntilChanged()
+
+    /**
+     * The card has to watch the meal table, not merely the settings.
+     *
+     * It did not, and the consequence was on screen: the totals card said
+     * 121 kcal while this one still said 0, because `combine` had no reason to
+     * re-run — logging a meal changes no setting and no weight. Observing the
+     * day's meals is what makes the number live.
+     */
     val state: StateFlow<EnergyState> = combine(
         settingsStore.settings,
         db.weightDao().observeAscending(),
         _message,
         recomputed,
-    ) { settings, weights, message, _ ->
+        day,
+    ) { settings, weights, message, _, today -> Sources(settings, weights, message, today) }
+        .flatMapLatest { (settings, weights, message, today) ->
+            db.mealDao()
+                .observeBetween(HealthyDay.startOf(today), HealthyDay.endOf(today))
+                .map { mealsToday -> build(settings, weights, message, today, mealsToday) }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), EnergyState())
+
+    private data class Sources(
+        val settings: HealthySettings,
+        val weights: List<com.healthy.app.data.entity.Weight>,
+        val message: String?,
+        val today: String,
+    )
+
+    private suspend fun build(
+        settings: HealthySettings,
+        weights: List<com.healthy.app.data.entity.Weight>,
+        message: String?,
+        today: String,
+        mealsToday: List<com.healthy.app.data.entity.MealEntry>,
+    ): EnergyState {
         val currentKg = weights.lastOrNull()?.weightKg
         val basal = basalFor(settings, currentKg)
 
@@ -82,15 +129,20 @@ class EnergyViewModel(app: Application) : AndroidViewModel(app) {
             null
         }
 
-        val todayKcal = todayKcal()
-        EnergyState(
+        val products = db.productDao().allForExport().associateBy { it.barcode }
+        val todayKcal = Nutrition.totalFor(mealsToday, products).kcal.toInt()
+        // Computed once. It was being queried twice per emission, for the
+        // count and again for the comparison.
+        val logged = completeDays().size
+
+        return EnergyState(
             plan = plan,
             consumedTodayKcal = todayKcal,
             percentOfTarget = Energy.percentOfTarget(todayKcal.toDouble(), plan?.targetKcal),
-            loggedDays = completeDays().size,
+            loggedDays = logged,
             calculatedAt = settings.maintenanceCalculatedAt,
             message = message,
-            canMeasure = completeDays().size >= Energy.WINDOW_DAYS && weights.size >= 2,
+            canMeasure = logged >= Energy.WINDOW_DAYS && weights.size >= 2,
             missingBody = settings.heightCm == null || settings.ageYears == null || settings.sexMale == null,
             bodyWeightKg = currentKg,
             goalTargetKg = settings.goalTargetKg,
@@ -101,7 +153,7 @@ class EnergyViewModel(app: Application) : AndroidViewModel(app) {
             ageYears = settings.ageYears,
             sexMale = settings.sexMale,
         )
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), EnergyState())
+    }
 
     /**
      * Recalculates maintenance from the user's own data (spec 16.1).
@@ -236,10 +288,4 @@ class EnergyViewModel(app: Application) : AndroidViewModel(app) {
             .takeLast(Energy.WINDOW_DAYS)
     }
 
-    private suspend fun todayKcal(): Int {
-        val today = HealthyDay.today()
-        val meals = db.mealDao().between(HealthyDay.startOf(today), HealthyDay.endOf(today))
-        val products = db.productDao().allForExport().associateBy { it.barcode }
-        return com.healthy.app.analysis.Nutrition.totalFor(meals, products).kcal.toInt()
-    }
 }
