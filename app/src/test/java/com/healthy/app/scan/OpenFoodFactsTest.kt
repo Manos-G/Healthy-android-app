@@ -78,6 +78,28 @@ class OpenFoodFactsTest {
         assertNull(p.mg)
     }
 
+    /**
+     * Reported from the phone: a Hell white peach scanned as 100 ml when the
+     * can holds 250. The record carries a caffeine figure and no quantity, so
+     * the only honest reading of "0.032 g per 100 g" is 32 mg per 100 ml with
+     * the container size unknown.
+     *
+     * The figure must not be dressed up as a whole can, and the volume must
+     * stay null rather than default to 100, because a null is a question the
+     * review dialog can ask and a 100 is a wrong answer nobody is shown.
+     */
+    @Test
+    fun `no quantity leaves the volume unknown rather than assuming 100 ml`() {
+        val p = found(
+            """{"product":{"product_name":"Hell White Peach","brands":"Hell",
+               "nutriments":{"caffeine_100g":0.032}}}"""
+        )
+        assertNull(p.volumeMl)
+        assertEquals(32, p.mg)
+        // What the user corrects it to in the review dialog.
+        assertEquals(80, OpenFoodFacts.totalMg(32, 100, 250))
+    }
+
     @Test
     fun `nutrients for food are read, including the two that matter for sleep`() {
         val p = found(

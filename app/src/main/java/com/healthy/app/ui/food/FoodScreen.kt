@@ -87,6 +87,14 @@ fun FoodScreen(
     ) {
         item { com.healthy.app.ui.energy.EnergyCard(vm = energy) }
         item { TotalsCard(state.totals, state.today.size, targetKcal) }
+        item {
+            NutrientCard(
+                today = state.totals,
+                recentDays = state.recentDays,
+                bodyWeightKg = energyState.bodyWeightKg,
+                energyTargetKcal = targetKcal,
+            )
+        }
 
         item {
             SectionCard {
@@ -130,6 +138,9 @@ fun FoodScreen(
                 TextButton(onClick = { showRecipes = true }) {
                     Text("Recipes", color = HealthyColors.Sleep, fontSize = 13.sp)
                 }
+                // Spec 5.4: a QR code carries one food or one recipe between
+                // phones with no server and no account.
+                com.healthy.app.scan.QrReceiveButton(onDecoded = vm::receiveShared)
             }
         }
 
@@ -242,6 +253,18 @@ private fun TotalsCard(totals: Nutrition.Totals, count: Int, targetKcal: Int?) {
             Figure("Sugar", "${totals.sugar.toInt()}", "g")
             Figure("Salt", "%.1f".format(totals.salt), "g")
             Figure("Magnesium", "${(totals.magnesium * 1000).toInt()}", "mg")
+        }
+        if (targetKcal == null) {
+            // Otherwise the percentages simply are not there and it reads as a
+            // missing feature rather than a missing target.
+            Text(
+                "No daily target yet, so no percentages. Fill in the Energy card above " +
+                    "— height, age, sex and a goal — and every calorie figure here will " +
+                    "say what share of the day it is.",
+                color = HealthyColors.Sleep,
+                fontSize = 11.sp,
+                modifier = Modifier.padding(top = 10.dp),
+            )
         }
         Text(
             "These are here so the comparison table has something to compare. " +

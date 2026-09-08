@@ -48,6 +48,8 @@ data class Product(
     @ColumnInfo(name = "carbs100") val carbs100: Double? = null,
     @ColumnInfo(name = "sugar100") val sugar100: Double? = null,
     @ColumnInfo(name = "fat100") val fat100: Double? = null,
+    /** Spec 16.4 sets a ceiling on this, so it is stored separately from fat. */
+    @ColumnInfo(name = "saturatedFat100") val saturatedFat100: Double? = null,
     @ColumnInfo(name = "fibre100") val fibre100: Double? = null,
     @ColumnInfo(name = "salt100") val salt100: Double? = null,
 

@@ -142,6 +142,7 @@ object JsonRestore {
                         carbs100 = o.doubleOrNull("carbs100"),
                         sugar100 = o.doubleOrNull("sugar100"),
                         fat100 = o.doubleOrNull("fat100"),
+                        saturatedFat100 = o.doubleOrNull("saturatedFat100"),
                         fibre100 = o.doubleOrNull("fibre100"),
                         salt100 = o.doubleOrNull("salt100"),
                         calcium100 = o.doubleOrNull("calcium100"),

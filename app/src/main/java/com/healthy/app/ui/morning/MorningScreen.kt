@@ -274,9 +274,27 @@ private fun SleepCard(form: MorningForm, vm: MorningViewModel) {
 @Composable
 private fun HypnogramCard(form: MorningForm) {
     SectionCard {
-        CardTitle(
-            "The shape of the night",
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "The shape of the night",
+                color = HealthyColors.Paper,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.SemiBold,
+            )
+            com.healthy.app.ui.sources.SourceLink(
+                item = "Heart rate cycle detection",
+                modifier = Modifier.padding(start = 6.dp),
+            )
+            com.healthy.app.ui.sources.SourceLink(
+                item = "Sleep stages",
+                modifier = Modifier.padding(start = 4.dp),
+            )
+        }
+        Text(
             "Measured from heart rate, not from the watch's stages.",
+            color = HealthyColors.Muted,
+            fontSize = 12.sp,
+            modifier = Modifier.padding(top = 2.dp),
         )
         com.healthy.app.ui.hypnogram.HypnogramChart(
             result = form.hypnogram!!,

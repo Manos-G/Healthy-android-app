@@ -138,6 +138,7 @@ object Recipes {
         carbs = t.carbs * factor,
         sugar = t.sugar * factor,
         fat = t.fat * factor,
+        saturatedFat = t.saturatedFat * factor,
         fibre = t.fibre * factor,
         salt = t.salt * factor,
         magnesium = t.magnesium * factor,

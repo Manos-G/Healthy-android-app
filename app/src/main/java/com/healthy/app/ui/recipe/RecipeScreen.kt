@@ -130,6 +130,7 @@ fun RecipeScreen(
 private fun RecipeRow(card: RecipeCard, targetKcal: Int?, vm: RecipeViewModel) {
     var open by remember { mutableStateOf(false) }
     var weighed by remember { mutableStateOf("") }
+    var sharing by remember { mutableStateOf(false) }
 
     SectionCard {
         Row(
@@ -152,6 +153,14 @@ private fun RecipeRow(card: RecipeCard, targetKcal: Int?, vm: RecipeViewModel) {
             TextButton(onClick = { open = !open }) {
                 Text(if (open) "Hide" else "Log", color = HealthyColors.Sleep, fontSize = 13.sp)
             }
+        }
+
+        if (sharing) {
+            com.healthy.app.scan.QrShareDialog(
+                payload = com.healthy.app.scan.QrPayload.encode(card.recipe, card.items),
+                title = card.recipe.name,
+                onDismiss = { sharing = false },
+            )
         }
 
         card.problem?.let { problem ->
@@ -221,8 +230,13 @@ private fun RecipeRow(card: RecipeCard, targetKcal: Int?, vm: RecipeViewModel) {
                 fontSize = 11.sp,
                 modifier = Modifier.padding(top = 6.dp),
             )
-            TextButton(onClick = { vm.delete(card) }) {
-                Text("Delete recipe", color = HealthyColors.Warn, fontSize = 12.sp)
+            Row {
+                TextButton(onClick = { sharing = true }) {
+                    Text("Share as QR", color = HealthyColors.Sleep, fontSize = 12.sp)
+                }
+                TextButton(onClick = { vm.delete(card) }) {
+                    Text("Delete recipe", color = HealthyColors.Warn, fontSize = 12.sp)
+                }
             }
         }
     }

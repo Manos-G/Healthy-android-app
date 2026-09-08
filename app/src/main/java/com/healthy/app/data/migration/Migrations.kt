@@ -59,5 +59,16 @@ object Migrations {
         }
     }
 
-    val ALL: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3)
+    /**
+     * Spec 16.4 puts a ceiling on saturated fat, which needs its own column:
+     * it cannot be derived from total fat. Additive and nullable, so every
+     * product already stored reads as "not recorded" rather than zero.
+     */
+    val MIGRATION_3_4 = object : Migration(3, 4) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE `product` ADD COLUMN `saturatedFat100` REAL")
+        }
+    }
+
+    val ALL: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
 }

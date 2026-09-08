@@ -37,6 +37,10 @@ data class WeightState(
     val progress: WeightGoal.Progress? = null,
     val maxRateKgPerWeek: Double? = null,
     val rateRefusal: String? = null,
+    val goalTargetKg: Double? = null,
+    /** Where the current rate leads, week by week, from today's trend. */
+    val projection: List<Double> = emptyList(),
+    val dailyTargetKcal: Int? = null,
 )
 
 class WeightViewModel(app: Application) : AndroidViewModel(app) {
@@ -78,8 +82,42 @@ class WeightViewModel(app: Application) : AndroidViewModel(app) {
             },
             maxRateKgPerWeek = weights.lastOrNull()?.let { WeightGoal.maximumRate(it.weightKg) },
             rateRefusal = refusal,
+            goalTargetKg = settings.goalTargetKg,
+            projection = projectionFor(points, settings),
+            dailyTargetKcal = settings.maintenanceKcal?.let { maintenance ->
+                com.healthy.app.analysis.Energy.dailyTarget(
+                    maintenanceKcal = maintenance,
+                    rateKgPerWeek = settings.goalRateKgPerWeek ?: 0.0,
+                    basalKcal = 0,
+                ).kcal
+            },
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), WeightState())
+
+    /**
+     * Where the chosen rate leads, from today's trend to the goal weight.
+     *
+     * One point per day so it continues the same axis as the trend, and it
+     * stops at the goal rather than running on forever: the line is the plan,
+     * and the plan ends when it arrives.
+     */
+    private fun projectionFor(
+        points: List<WeightTrend.Point>,
+        settings: HealthySettings,
+    ): List<Double> {
+        if (settings.goalMode != HealthySettings.GOAL_CHANGE) return emptyList()
+        val rate = settings.goalRateKgPerWeek ?: return emptyList()
+        val target = settings.goalTargetKg ?: return emptyList()
+        val start = points.lastOrNull()?.trendKg ?: return emptyList()
+        if (rate == 0.0) return emptyList()
+        // A rate pointing away from the goal has nothing to project.
+        if ((target - start > 0) != (rate > 0)) return emptyList()
+
+        val perDay = rate / 7.0
+        val days = Math.ceil(kotlin.math.abs((target - start) / perDay)).toInt()
+            .coerceIn(1, MAX_PROJECTION_DAYS)
+        return (0..days).map { day -> start + perDay * day }
+    }
 
     /**
      * Goal changes (spec 8.5).
@@ -96,6 +134,19 @@ class WeightViewModel(app: Application) : AndroidViewModel(app) {
     fun setHoldGoal(targetKg: Double) {
         viewModelScope.launch {
             settingsStore.setHoldGoal(targetKg, HealthyDay.today())
+            _refusal.value = null
+        }
+    }
+
+    /**
+     * The goal weight, which the Food tab reads too.
+     *
+     * There is one goal. Setting it here and setting it there write the same
+     * setting, so the energy target and the projection can never disagree.
+     */
+    fun setGoalWeight(targetKg: Double) {
+        viewModelScope.launch {
+            settingsStore.setGoalTargetKg(targetKg)
             _refusal.value = null
         }
     }
@@ -214,5 +265,10 @@ class WeightViewModel(app: Application) : AndroidViewModel(app) {
             )
             onDone(writer.writeWeight(kilograms, now))
         }
+    }
+
+    private companion object {
+        /** A year. Beyond that a projection is a fiction, not a plan. */
+        const val MAX_PROJECTION_DAYS = 365
     }
 }

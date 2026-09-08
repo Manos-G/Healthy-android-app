@@ -32,6 +32,17 @@ data class EnergyState(
     val message: String? = null,
     val canMeasure: Boolean = false,
     val missingBody: Boolean = false,
+    /** Needed for the protein floor, which is stated per kilogram. */
+    val bodyWeightKg: Double? = null,
+    /**
+     * The one weight goal, shown here as well as on the Weight tab. It was
+     * split across the two screens and neither showed the whole plan.
+     */
+    val goalTargetKg: Double? = null,
+    val goalRateKgPerWeek: Double? = null,
+    val heightCm: Double? = null,
+    val ageYears: Int? = null,
+    val sexMale: Boolean? = null,
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -81,6 +92,14 @@ class EnergyViewModel(app: Application) : AndroidViewModel(app) {
             message = message,
             canMeasure = completeDays().size >= Energy.WINDOW_DAYS && weights.size >= 2,
             missingBody = settings.heightCm == null || settings.ageYears == null || settings.sexMale == null,
+            bodyWeightKg = currentKg,
+            goalTargetKg = settings.goalTargetKg,
+            goalRateKgPerWeek = settings.goalRateKgPerWeek.takeIf {
+                settings.goalMode == HealthySettings.GOAL_CHANGE
+            },
+            heightCm = settings.heightCm,
+            ageYears = settings.ageYears,
+            sexMale = settings.sexMale,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), EnergyState())
 
@@ -135,10 +154,50 @@ class EnergyViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /**
+     * Saves the body figures and immediately recalculates.
+     *
+     * Without this the user filled three boxes, pressed Save, and nothing
+     * appeared — the number only arrived after a separate Recalculate they had
+     * no reason to expect.
+     */
     fun setBody(heightCm: Double?, ageYears: Int?, sexMale: Boolean?) {
         viewModelScope.launch {
             settingsStore.setBody(heightCm, ageYears, sexMale)
             recomputed.value++
+            recalculate()
+        }
+    }
+
+    /**
+     * The weight goal, which is one goal however it is reached.
+     *
+     * It was split between two screens: the rate lived on the Weight tab and
+     * the goal weight on the Food tab, so neither screen showed the whole
+     * plan. Both now write the same settings and both show the same result.
+     */
+    fun setGoal(rateKgPerWeek: Double?, targetKg: Double?) {
+        viewModelScope.launch {
+            val weights = db.weightDao()
+            val bodyWeight = weights.mostRecent()?.weightKg
+            targetKg?.let { settingsStore.setGoalTargetKg(it) }
+
+            if (rateKgPerWeek != null) {
+                if (bodyWeight == null) {
+                    _message.value = "Log a weight first, so the app knows what 1 percent of it is."
+                    return@launch
+                }
+                when (val check = com.healthy.app.analysis.WeightGoal.checkRate(rateKgPerWeek, bodyWeight)) {
+                    is com.healthy.app.analysis.WeightGoal.RateCheck.TooFast -> {
+                        _message.value = check.message
+                        return@launch
+                    }
+                    com.healthy.app.analysis.WeightGoal.RateCheck.Allowed ->
+                        settingsStore.setChangeGoal(rateKgPerWeek, HealthyDay.today())
+                }
+            }
+            recomputed.value++
+            recalculate()
         }
     }
 

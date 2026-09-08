@@ -99,6 +99,37 @@ object Sources {
                 "estimate instead and says so. A formula is often 300 kcal wrong.",
         ),
         Entry(
+            item = "Protein target",
+            value = "${NutrientTargets.PROTEIN_G_PER_KG} g per kg",
+            basis = "A floor, scaled to body weight, in the range commonly given " +
+                "for people who train.",
+            limitation = "It is a floor rather than a goal, and body weight is a crude " +
+                "scale: lean mass is what needs the protein, and this app does not " +
+                "know yours.",
+        ),
+        Entry(
+            item = "Fibre target",
+            value = "${NutrientTargets.FIBRE_G.toInt()} g",
+            basis = "A common daily recommendation for adults.",
+            limitation = "A population figure. It says nothing about what your own gut " +
+                "is comfortable with.",
+        ),
+        Entry(
+            item = "Sugar and saturated fat ceilings",
+            value = "${NutrientTargets.SUGAR_PERCENT_OF_ENERGY.toInt()} percent of energy",
+            basis = "Each expressed as a share of your energy target, so both move " +
+                "when the target does.",
+            limitation = "Sugar here is whatever the label counted, which lumps the sugar " +
+                "in fruit together with the sugar in a biscuit.",
+        ),
+        Entry(
+            item = "Salt ceiling",
+            value = "${NutrientTargets.SALT_G.toInt()} g",
+            basis = "A common daily upper limit.",
+            limitation = "Salt on food after it is cooked is invisible to this app, so " +
+                "the figure is a floor on what you actually ate.",
+        ),
+        Entry(
             item = "Reference intakes",
             value = "Various",
             basis = "U.S. National Academies, Institute of Medicine tables.",

@@ -61,12 +61,22 @@ fun EnergyCard(
         colors = CardDefaults.cardColors(containerColor = HealthyColors.Raised),
     ) {
         Column(Modifier.padding(16.dp)) {
-            Text(
-                "Energy",
-                color = HealthyColors.Paper,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.SemiBold,
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "Energy",
+                    color = HealthyColors.Paper,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                com.healthy.app.ui.sources.SourceLink(
+                    item = "Measured energy need",
+                    modifier = Modifier.padding(start = 6.dp),
+                )
+                com.healthy.app.ui.sources.SourceLink(
+                    item = "Energy in 1 kg of tissue",
+                    modifier = Modifier.padding(start = 4.dp),
+                )
+            }
 
             val plan = state.plan
             if (plan == null) {
@@ -125,6 +135,33 @@ fun EnergyCard(
                     drawStopIndicator = {},
                 )
 
+                // The two numbers side by side, because "what I need" and
+                // "what I am aiming at" are different questions and the
+                // difference between them is the whole plan.
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Figure("Need to hold", "${plan.maintenance.kcal}", HealthyColors.Paper)
+                    Figure("Target today", "${plan.targetKcal}", HealthyColors.Sleep)
+                    Figure(
+                        "Difference",
+                        "%+d".format(plan.targetKcal - plan.maintenance.kcal),
+                        if (plan.targetKcal == plan.maintenance.kcal) {
+                            HealthyColors.Muted
+                        } else {
+                            HealthyColors.Caffeine
+                        },
+                    )
+                    Figure(
+                        "Left today",
+                        "${plan.targetKcal - state.consumedTodayKcal}",
+                        HealthyColors.Paper,
+                    )
+                }
+
+                GoalLine(state, plan)
+
                 Text(
                     buildString {
                         append("Holding your weight takes about ${plan.maintenance.kcal} kcal")
@@ -135,15 +172,6 @@ fun EnergyCard(
                                 ", estimated from a formula. It is often 300 kcal out."
                             }
                         )
-                        if (plan.rateKgPerWeek != 0.0) {
-                            append(" Your goal of ${"%+.2f".format(plan.rateKgPerWeek)} kg a week ")
-                            append("makes the daily target ${plan.targetKcal}.")
-                        }
-                        plan.weeksToTarget?.let { weeks ->
-                            append(" At that rate the goal weight is about $weeks week")
-                            if (weeks != 1) append("s")
-                            append(" away.")
-                        }
                     },
                     color = HealthyColors.Muted,
                     fontSize = 12.sp,
@@ -227,33 +255,47 @@ fun EnergyCard(
 @Composable
 private fun BodyFields(vm: EnergyViewModel) {
     val state by vm.state.collectAsStateWithLifecycle()
-    var height by remember { mutableStateOf("") }
-    var age by remember { mutableStateOf("") }
-    var target by remember { mutableStateOf("") }
+    // Keyed on what was saved, so the boxes show the stored figures instead of
+    // sitting empty and looking as though nothing was kept.
+    var height by remember(state.heightCm) { mutableStateOf(state.heightCm?.let { fmt(it) } ?: "") }
+    var age by remember(state.ageYears) { mutableStateOf(state.ageYears?.toString() ?: "") }
+    var target by remember(state.goalTargetKg) {
+        mutableStateOf(state.goalTargetKg?.let { fmt(it) } ?: "")
+    }
+    var rate by remember(state.goalRateKgPerWeek) {
+        mutableStateOf(state.goalRateKgPerWeek?.let { "%.2f".format(it) } ?: "")
+    }
 
     Column(Modifier.padding(top = 12.dp)) {
         Text(
-            "Only used for the starting estimate and to stop the target dropping " +
-                "below your basal rate.",
+            "Height, age and sex are only used for the starting estimate and to stop " +
+                "the target dropping below your basal rate. The goal weight and rate " +
+                "are the same ones as on the Weight tab.",
             color = HealthyColors.Muted,
             fontSize = 11.sp,
         )
         Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Field("Height cm", height, Modifier.weight(1f)) { height = it }
             Field("Age", age, Modifier.weight(1f)) { age = it }
-            Field("Goal kg", target, Modifier.weight(1f)) { target = it }
         }
+        Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Field("Goal kg", target, Modifier.weight(1f)) { target = it }
+            Field("kg per week", rate, Modifier.weight(1f), signed = true) { rate = it }
+        }
+        Text(
+            "A negative rate loses weight: -0.5 means half a kilo a week off, which " +
+                "is about 550 kcal a day below what you need.",
+            color = HealthyColors.Muted,
+            fontSize = 11.sp,
+            modifier = Modifier.padding(top = 4.dp),
+        )
         Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = { vm.setBody(null, null, sexMale = true) }) {
-                Text("Male", color = HealthyColors.Sleep, fontSize = 12.sp)
-            }
-            TextButton(onClick = { vm.setBody(null, null, sexMale = false) }) {
-                Text("Female", color = HealthyColors.Sleep, fontSize = 12.sp)
-            }
+            SexButton("Male", state.sexMale == true) { vm.setBody(null, null, sexMale = true) }
+            SexButton("Female", state.sexMale == false) { vm.setBody(null, null, sexMale = false) }
             TextButton(
                 onClick = {
                     vm.setBody(height.toDoubleOrNull(), age.toIntOrNull(), null)
-                    target.toDoubleOrNull()?.let(vm::setGoalTarget)
+                    vm.setGoal(rate.toDoubleOrNull(), target.toDoubleOrNull())
                 },
             ) {
                 Text("Save", color = HealthyColors.Sleep, fontSize = 12.sp)
@@ -262,11 +304,78 @@ private fun BodyFields(vm: EnergyViewModel) {
     }
 }
 
+/** One labelled number in the need/target row. */
 @Composable
-private fun Field(label: String, value: String, modifier: Modifier, onChange: (String) -> Unit) {
+private fun Figure(label: String, value: String, color: androidx.compose.ui.graphics.Color) {
+    Column {
+        Text(label, color = HealthyColors.Muted, fontSize = 10.sp)
+        Text(value, color = color, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+    }
+}
+
+/** Where the weight goal stands, in one line. */
+@Composable
+private fun GoalLine(state: EnergyState, plan: Energy.Plan) {
+    val target = state.goalTargetKg
+    val now = state.bodyWeightKg
+    Text(
+        buildString {
+            if (target == null) {
+                append("No goal weight set. Add one below and the app will say how long it takes.")
+            } else {
+                append("Goal ${fmt(target)} kg")
+                if (now != null) {
+                    val gap = target - now
+                    append(", now ${fmt(now)} kg — ${fmt(kotlin.math.abs(gap))} kg ")
+                    append(if (gap < 0) "to lose." else if (gap > 0) "to gain." else "there.")
+                }
+                if (plan.rateKgPerWeek == 0.0) {
+                    append(" No rate set, so the target is simply what holds your weight.")
+                } else {
+                    append(" At ${"%+.2f".format(plan.rateKgPerWeek)} kg a week")
+                    plan.weeksToTarget?.let { weeks ->
+                        append(", about $weeks week")
+                        if (weeks != 1) append("s")
+                        append(" away")
+                    }
+                    append(".")
+                }
+            }
+        },
+        color = HealthyColors.Paper,
+        fontSize = 12.sp,
+        modifier = Modifier.padding(top = 10.dp),
+    )
+}
+
+@Composable
+private fun SexButton(label: String, selected: Boolean, onClick: () -> Unit) {
+    TextButton(onClick = onClick) {
+        Text(
+            if (selected) "$label ✓" else label,
+            color = if (selected) HealthyColors.Paper else HealthyColors.Sleep,
+            fontSize = 12.sp,
+        )
+    }
+}
+
+private fun fmt(value: Double): String =
+    if (value == value.toLong().toDouble()) value.toLong().toString() else "%.1f".format(value)
+
+@Composable
+private fun Field(
+    label: String,
+    value: String,
+    modifier: Modifier,
+    signed: Boolean = false,
+    onChange: (String) -> Unit,
+) {
     OutlinedTextField(
         value = value,
-        onValueChange = { v -> onChange(v.filter { it.isDigit() || it == '.' }) },
+        // A losing rate is negative, so the minus has to survive the filter.
+        onValueChange = { v ->
+            onChange(v.filter { it.isDigit() || it == '.' || (signed && it == '-') })
+        },
         label = { Text(label, fontSize = 10.sp) },
         singleLine = true,
         modifier = modifier,

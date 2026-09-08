@@ -28,8 +28,26 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
     sealed interface State {
         data object Idle : State
 
-        /** Known code, drink logged, no network touched. */
-        data class Logged(val product: Product, val fromCache: Boolean) : State
+        /**
+         * Known code, drink logged, no network touched.
+         *
+         * [drinkId] is the row that was written, so the values behind it can
+         * still be corrected without logging the drink a second time.
+         */
+        data class Logged(
+            val product: Product,
+            val fromCache: Boolean,
+            val drinkId: Long? = null,
+        ) : State
+
+        /**
+         * Found online, showing what came back so it can be corrected.
+         *
+         * Open Food Facts is edited by the public and is often wrong or
+         * incomplete. Storing what it says without showing it means a bad
+         * figure is silently believed for as long as that barcode exists.
+         */
+        data class Review(val product: Product, val drinkId: Long? = null) : State
 
         /**
          * A barcode the app has never seen. Spec 11.1: it asks which kind it
@@ -111,11 +129,10 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
     /** Sends a known product to the question its kind calls for (spec 11.1). */
     private suspend fun route(product: Product) {
         _state.value = when {
+            // A stored product has been reviewed already, so it goes straight
+            // through; only a fresh lookup is put in front of the user.
             product.kind == Product.KIND_FOOD -> State.NeedsPortion(product)
-            product.mg != null -> {
-                logDrink(product)
-                State.Logged(product, fromCache = true)
-            }
+            product.mg != null -> State.Logged(product, fromCache = true, drinkId = logDrink(product))
             else -> State.NeedsCaffeine(product, guessFor(product))
         }
     }
@@ -125,18 +142,55 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             val typed = product.copy(kind = kind)
             products.upsert(typed)
-            route(typed)
+            // Straight to review, so whatever the database said is on screen
+            // and editable before it is believed.
+            _state.value = State.Review(typed)
         }
     }
 
     /**
-     * Stores what the user read off the can, so the app never asks again for
-     * that barcode (spec 11.4) — including in flight mode.
+     * Stores the figures as the user corrected them, then carries on.
+     *
+     * The correction is marked [Product.USER] so a later lookup cannot
+     * overwrite it with the public value it disagreed with.
      */
+    fun saveReviewed(product: Product, drinkId: Long? = null) {
+        viewModelScope.launch {
+            val corrected = product.copy(source = Product.USER)
+            products.upsert(corrected)
+
+            // Correcting a drink that is already in the log: fix that row
+            // rather than write a second one.
+            if (drinkId != null) {
+                drinks.byId(drinkId)?.let { logged ->
+                    drinks.update(
+                        logged.copy(
+                            name = drinkName(corrected),
+                            mg = corrected.mg ?: 0,
+                            volumeMl = corrected.volumeMl ?: 0,
+                        )
+                    )
+                }
+                _state.value = State.Logged(corrected, fromCache = false, drinkId = drinkId)
+                return@launch
+            }
+
+            _state.value = when {
+                corrected.kind == Product.KIND_FOOD -> State.NeedsPortion(corrected)
+                // Left blank in the review and unknown to the database: the
+                // user reads the can, with a guess offered.
+                corrected.mg == null -> State.NeedsCaffeine(corrected, guessFor(corrected))
+                else -> State.Logged(corrected, fromCache = false, drinkId = logDrink(corrected))
+            }
+        }
+    }
+
     /**
      * [mgPerReference] and [referenceMl] are what the label says — "32 mg per
      * 100 ml" — and [containerMl] is how much the can holds. The product table
      * stores the total for the container, because that is what a tap logs.
+     * Stored once, so the app never asks again for that barcode (spec 11.4),
+     * including in flight mode.
      */
     fun saveCaffeine(
         product: Product,
@@ -153,8 +207,7 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
                 source = Product.USER,
             )
             products.upsert(completed)
-            logDrink(completed)
-            _state.value = State.Logged(completed, fromCache = false)
+            _state.value = State.Logged(completed, fromCache = false, drinkId = logDrink(completed))
         }
     }
 
@@ -191,15 +244,22 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
         _state.value = State.Idle
     }
 
-    private suspend fun logDrink(product: Product) {
+    /** Re-opens the review for a drink already logged, so it can be corrected. */
+    fun correct(product: Product, drinkId: Long?) {
+        _state.value = State.Review(product, drinkId)
+    }
+
+    private fun drinkName(product: Product): String =
+        listOfNotNull(product.brand, product.name).joinToString(" ").trim()
+            .ifBlank { product.name }
+
+    private suspend fun logDrink(product: Product): Long =
         drinks.insert(
             Drink(
-                name = listOfNotNull(product.brand, product.name).joinToString(" ").trim()
-                    .ifBlank { product.name },
+                name = drinkName(product),
                 mg = product.mg ?: 0,
                 timestamp = System.currentTimeMillis(),
                 volumeMl = product.volumeMl ?: 0,
             )
         )
-    }
 }

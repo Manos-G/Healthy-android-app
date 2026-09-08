@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.Query
+import androidx.room.Update
 import com.healthy.app.data.entity.Drink
 import kotlinx.coroutines.flow.Flow
 
@@ -20,6 +21,13 @@ interface DrinkDao {
 
     @Delete
     suspend fun delete(drink: Drink)
+
+    /** Correcting a logged drink in place, when the scanned values were wrong. */
+    @Update
+    suspend fun update(drink: Drink)
+
+    @Query("SELECT * FROM drink WHERE id = :id")
+    suspend fun byId(id: Long): Drink?
 
     @Query("DELETE FROM drink WHERE id = :id")
     suspend fun deleteById(id: Long)

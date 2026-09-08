@@ -158,6 +158,10 @@ private fun HeroCard(state: TodayState) {
                 fontSize = 15.sp,
                 modifier = Modifier.padding(bottom = 8.dp),
             )
+            com.healthy.app.ui.sources.SourceLink(
+                item = "Caffeine half-life",
+                modifier = Modifier.padding(start = 6.dp, bottom = 12.dp),
+            )
         }
 
         CaffeineCurve(
@@ -176,11 +180,17 @@ private fun HeroCard(state: TodayState) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column {
-                Text(
-                    "At bedtime ${state.bedtimeLabel}",
-                    color = HealthyColors.Muted,
-                    fontSize = 13.sp,
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "At bedtime ${state.bedtimeLabel}",
+                        color = HealthyColors.Muted,
+                        fontSize = 13.sp,
+                    )
+                    com.healthy.app.ui.sources.SourceLink(
+                        item = "Bedtime caffeine limit",
+                        modifier = Modifier.padding(start = 4.dp),
+                    )
+                }
                 Text(
                     "${state.bedtimeMg} mg",
                     color = HealthyColors.Paper,

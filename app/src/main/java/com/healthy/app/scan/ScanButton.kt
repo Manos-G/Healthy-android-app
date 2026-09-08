@@ -90,6 +90,14 @@ fun ScanButton(
                 append(if (s.fromCache) " Read from this phone, no network used." else " Looked up once; it is stored now.")
             },
             onDismiss = vm::dismiss,
+            onCorrect = { vm.correct(s.product, s.drinkId) },
+        )
+
+        is ScanViewModel.State.Review -> ReviewDialog(
+            product = s.product,
+            correcting = s.drinkId != null,
+            onSave = { corrected -> vm.saveReviewed(corrected, s.drinkId) },
+            onDismiss = vm::dismiss,
         )
 
         is ScanViewModel.State.NeedsCaffeine -> CaffeineDialog(
@@ -238,7 +246,12 @@ private fun KindDialog(
 }
 
 @Composable
-private fun ResultDialog(title: String, body: String, onDismiss: () -> Unit) {
+private fun ResultDialog(
+    title: String,
+    body: String,
+    onDismiss: () -> Unit,
+    onCorrect: (() -> Unit)? = null,
+) {
     Dialog(onDismissRequest = onDismiss) {
         Card(
             shape = RoundedCornerShape(16.dp),
@@ -248,6 +261,13 @@ private fun ResultDialog(title: String, body: String, onDismiss: () -> Unit) {
                 Text(title, color = HealthyColors.Paper, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
                 Text(body, color = HealthyColors.Muted, fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    // A stored product is only asked about once, so without a
+                    // way back in a wrong figure would stay wrong forever.
+                    if (onCorrect != null) {
+                        TextButton(onClick = onCorrect) {
+                            Text("Fix these values", color = HealthyColors.Muted)
+                        }
+                    }
                     TextButton(onClick = onDismiss) { Text("Done", color = HealthyColors.Sleep) }
                 }
             }
@@ -321,17 +341,31 @@ private fun CaffeineDialog(
                     Modifier.fillMaxWidth().padding(top = 10.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    NumberBox("Caffeine mg", mg, Modifier.weight(1f)) { mg = it }
-                    NumberBox("per ml", perMl, Modifier.weight(1f)) { perMl = it }
-                    NumberBox("Can holds ml", totalMl, Modifier.weight(1f)) { totalMl = it }
+                    NumberBox("mg on label", mg, Modifier.weight(1f)) { mg = it }
+                    NumberBox("per this ml", perMl, Modifier.weight(1f)) { perMl = it }
+                    NumberBox("whole can ml", totalMl, Modifier.weight(1f)) { totalMl = it }
                 }
                 Text(
                     computed?.let { "That is $it mg for the whole ${totalValue} ml." }
-                        ?: "Example: a label reading 32 mg per 100 ml on a 330 ml can is 106 mg.",
+                        ?: "Left to right: the number on the label, the volume it refers " +
+                        "to, then how much the container actually holds. 32, 100, 250 " +
+                        "means a 250 ml can at 32 mg per 100 ml — 80 mg.",
                     color = if (computed != null) HealthyColors.Sleep else HealthyColors.Muted,
                     fontSize = 12.sp,
                     modifier = Modifier.padding(top = 8.dp),
                 )
+                // Reported from the phone: a 250 ml can logged as 100 ml,
+                // because the label's "per 100 ml" was typed into both boxes.
+                if (totalValue == 100 && perValue == 100) {
+                    Text(
+                        "A 100 ml can is unusual. If the label reads \"per 100 ml\", that " +
+                            "belongs in the middle box only — the last one is the size of " +
+                            "the container, often 250, 330 or 500.",
+                        color = HealthyColors.Warn,
+                        fontSize = 11.sp,
+                        modifier = Modifier.padding(top = 6.dp),
+                    )
+                }
                 if (guess != null) {
                     Text(
                         "The ${guess.mgPer100Ml} is a guess from ${guess.basis}, not this " +

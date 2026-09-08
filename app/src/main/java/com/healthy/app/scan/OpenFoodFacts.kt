@@ -86,6 +86,7 @@ object OpenFoodFacts {
                 carbs100 = nutriments.doubleOrNull("carbohydrates_100g"),
                 sugar100 = nutriments.doubleOrNull("sugars_100g"),
                 fat100 = nutriments.doubleOrNull("fat_100g"),
+                saturatedFat100 = nutriments.doubleOrNull("saturated-fat_100g"),
                 fibre100 = nutriments.doubleOrNull("fiber_100g"),
                 salt100 = nutriments.doubleOrNull("salt_100g"),
                 calcium100 = nutriments.doubleOrNull("calcium_100g"),

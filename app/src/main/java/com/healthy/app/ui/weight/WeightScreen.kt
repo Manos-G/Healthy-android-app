@@ -196,6 +196,9 @@ private fun GoalCard(state: WeightState, vm: WeightViewModel) {
     var rateText by remember(state.rateKgPerWeek) {
         mutableStateOf(state.rateKgPerWeek?.let { "%.2f".format(it) } ?: "")
     }
+    var goalText by remember(state.goalTargetKg) {
+        mutableStateOf(state.goalTargetKg?.let { "%.1f".format(it) } ?: "")
+    }
 
     SectionCard {
         Text("Goal", color = HealthyColors.Paper, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
@@ -326,6 +329,23 @@ private fun GoalCard(state: WeightState, vm: WeightViewModel) {
                     onValueChange = { rateText = it },
                     onSet = { rateText.toDoubleOrNull()?.let(vm::setChangeGoal) },
                 )
+                // The goal weight is set here as well as on the Food tab; both
+                // write the same setting, so the two screens cannot disagree.
+                GoalField(
+                    label = "Goal weight kg",
+                    value = goalText,
+                    onValueChange = { goalText = it },
+                    onSet = { goalText.toDoubleOrNull()?.let(vm::setGoalWeight) },
+                )
+                state.dailyTargetKcal?.let { kcal ->
+                    Text(
+                        "That makes the daily energy target $kcal kcal, which is the same " +
+                            "number the Food tab shows.",
+                        color = HealthyColors.Sleep,
+                        fontSize = 12.sp,
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                }
                 Text(
                     state.maxRateKgPerWeek
                         ?.let { "The most this app will set is ${"%.2f".format(it)} kg a week, which is 1 percent of your weight." }
@@ -449,7 +469,13 @@ private fun ImportCard(vm: WeightViewModel) {
 @Composable
 private fun TrendCard(state: WeightState) {
     SectionCard {
-        Text("Trend", color = HealthyColors.Paper, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Trend", color = HealthyColors.Paper, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            com.healthy.app.ui.sources.SourceLink(
+                item = "Weight smoothing factor",
+                modifier = Modifier.padding(start = 6.dp),
+            )
+        }
 
         val change = state.changeOver30Days
         Text(
@@ -465,12 +491,41 @@ private fun TrendCard(state: WeightState) {
             modifier = Modifier.padding(top = 4.dp),
         )
 
+        state.holdTargetKg?.takeIf { state.goalMode == HealthySettings.GOAL_HOLD }?.let { target ->
+            Text(
+                "Holding ${"%.1f".format(target)} kg.",
+                color = HealthyColors.Sleep,
+                fontSize = 12.sp,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        }
+        state.goalTargetKg?.takeIf { state.goalMode == HealthySettings.GOAL_CHANGE }?.let { target ->
+            val current = state.points.lastOrNull()?.trendKg
+            Text(
+                buildString {
+                    append("Heading for ${"%.1f".format(target)} kg")
+                    current?.let { append(", ${"%.1f".format(kotlin.math.abs(it - target))} kg to go") }
+                    state.progress?.actualRateKgPerWeek?.let {
+                        append(". Actual ${"%+.2f".format(it)} kg a week")
+                    }
+                    append(".")
+                },
+                color = HealthyColors.Sleep,
+                fontSize = 12.sp,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        }
+
         if (state.points.size >= 2) {
             Canvas(Modifier.fillMaxWidth().height(120.dp).padding(top = 12.dp)) {
                 val points = state.points
                 val w = size.width
                 val h = size.height
-                val values = points.flatMap { listOf(it.weightKg, it.trendKg) }
+                // The projection shares the axis, so it has to share the range
+                // or the two lines cannot be compared by eye.
+                val projected = state.projection
+                val values = points.flatMap { listOf(it.weightKg, it.trendKg) } +
+                    projected + listOfNotNull(state.goalTargetKg)
                 val lo = values.min() - 0.3
                 val hi = values.max() + 0.3
                 val span = (hi - lo).coerceAtLeast(0.1)
@@ -495,12 +550,53 @@ private fun TrendCard(state: WeightState) {
                     if (i == 0) path.moveTo(x, yy) else path.lineTo(x, yy)
                 }
                 drawPath(path, color = HealthyColors.Sleep, style = Stroke(width = 3f))
+
+                // Spec 8.6: the plan, drawn against what actually happened.
+                // Dashed, because it is a projection and not a measurement.
+                if (projected.size >= 2) {
+                    val total = points.size + projected.size - 1
+                    val projStep = if (total > 1) w / (total - 1) else w
+                    val projPath = Path()
+                    projected.forEachIndexed { i, value ->
+                        val x = (points.size - 1 + i) * projStep
+                        val yy = y(value)
+                        if (i == 0) projPath.moveTo(x, yy) else projPath.lineTo(x, yy)
+                    }
+                    drawPath(
+                        projPath,
+                        color = HealthyColors.Caffeine,
+                        style = Stroke(
+                            width = 2f,
+                            pathEffect = androidx.compose.ui.graphics.PathEffect
+                                .dashPathEffect(floatArrayOf(6f, 6f)),
+                        ),
+                    )
+                }
+
+                state.goalTargetKg?.let { goal ->
+                    val goalY = y(goal)
+                    drawLine(
+                        color = HealthyColors.Muted,
+                        start = Offset(0f, goalY),
+                        end = Offset(w, goalY),
+                        strokeWidth = 1f,
+                        pathEffect = androidx.compose.ui.graphics.PathEffect
+                            .dashPathEffect(floatArrayOf(3f, 5f)),
+                    )
+                }
             }
             Row(
                 Modifier.fillMaxWidth().padding(top = 6.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Text(state.points.first().date, color = HealthyColors.Muted, fontSize = 10.sp)
+                if (state.projection.isNotEmpty()) {
+                    Text(
+                        "projected",
+                        color = HealthyColors.Caffeine,
+                        fontSize = 10.sp,
+                    )
+                }
                 Text(state.points.last().date, color = HealthyColors.Muted, fontSize = 10.sp)
             }
         }

@@ -31,6 +31,8 @@ data class FoodState(
     val today: List<LoggedItem> = emptyList(),
     val totals: Nutrition.Totals = Nutrition.Totals(),
     val searchResults: List<Product> = emptyList(),
+    /** The last seven logged days, for the mean beside today (spec 16.5). */
+    val recentDays: List<Nutrition.Totals> = emptyList(),
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -76,8 +78,19 @@ class FoodViewModel(app: Application) : AndroidViewModel(app) {
                 today = items.sortedByDescending { it.entry.timestamp },
                 totals = items.fold(Nutrition.Totals()) { acc, i -> acc + i.totals },
                 searchResults = results,
+                recentDays = recentDayTotals(),
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), FoodState())
+
+    /** Totals for each of the last seven logged days, oldest first. */
+    private suspend fun recentDayTotals(): List<Nutrition.Totals> {
+        val from = HealthyDay.startOf(HealthyDay.plusDays(HealthyDay.today(), -7))
+        val entries = meals.between(from, System.currentTimeMillis())
+        val byBarcode = products.allForExport().associateBy { it.barcode }
+        return entries.groupBy { HealthyDay.dayOf(it.timestamp) }
+            .toSortedMap()
+            .map { (_, dayEntries) -> Nutrition.totalFor(dayEntries, byBarcode) }
+    }
 
     fun setQuery(value: String) {
         _query.value = value
@@ -146,6 +159,39 @@ class FoodViewModel(app: Application) : AndroidViewModel(app) {
             products.upsert(product)
             log(product, grams, mealType)
         }
+    }
+
+    /**
+     * Stores an item another phone shared as a QR code (spec 5.4).
+     *
+     * A shared food joins the product table like any other, so it is
+     * searchable and one tap away afterwards. A shared recipe arrives with its
+     * ingredients intact.
+     */
+    fun receiveShared(decoded: com.healthy.app.scan.QrPayload.Decoded) {
+        viewModelScope.launch {
+            when (decoded) {
+                is com.healthy.app.scan.QrPayload.Decoded.Food -> {
+                    products.upsert(decoded.product)
+                    _shareMessage.value = "Added ${decoded.product.name}. It is in your search now."
+                }
+
+                is com.healthy.app.scan.QrPayload.Decoded.Dish -> {
+                    db.recipeDao().saveRecipe(decoded.recipe, decoded.items)
+                    _shareMessage.value = "Added the recipe ${decoded.recipe.name}."
+                }
+
+                is com.healthy.app.scan.QrPayload.Decoded.NotOurs ->
+                    _shareMessage.value = decoded.reason
+            }
+        }
+    }
+
+    private val _shareMessage = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
+    val shareMessage: kotlinx.coroutines.flow.StateFlow<String?> = _shareMessage
+
+    fun clearShareMessage() {
+        _shareMessage.value = null
     }
 
     fun delete(entry: MealEntry) {

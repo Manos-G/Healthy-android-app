@@ -40,6 +40,7 @@ object Nutrition {
         val carbs: Double = 0.0,
         val sugar: Double = 0.0,
         val fat: Double = 0.0,
+        val saturatedFat: Double = 0.0,
         val fibre: Double = 0.0,
         val salt: Double = 0.0,
         val magnesium: Double = 0.0,
@@ -47,7 +48,8 @@ object Nutrition {
     ) {
         operator fun plus(other: Totals) = Totals(
             kcal + other.kcal, protein + other.protein, carbs + other.carbs,
-            sugar + other.sugar, fat + other.fat, fibre + other.fibre,
+            sugar + other.sugar, fat + other.fat, saturatedFat + other.saturatedFat,
+            fibre + other.fibre,
             salt + other.salt, magnesium + other.magnesium, vitaminD + other.vitaminD,
         )
     }
@@ -68,6 +70,7 @@ object Nutrition {
             carbs = of(product.carbs100),
             sugar = of(product.sugar100),
             fat = of(product.fat100),
+            saturatedFat = of(product.saturatedFat100),
             fibre = of(product.fibre100),
             salt = of(product.salt100),
             // Spec 12.2: these two have a plausible link to sleep, which is
