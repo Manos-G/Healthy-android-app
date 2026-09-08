@@ -1,8 +1,26 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)
+}
+
+/**
+ * Release signing, read from a file that is not in git.
+ *
+ * Obtainium refuses an update whose signature differs from what is installed,
+ * so this key has to outlive every release: lose it and the only way to ship
+ * an update is to uninstall, which takes the database with it. The keystore
+ * sits outside the repository and is listed in .gitignore twice over.
+ *
+ * Absent the file the release build falls back to the debug key, so a fresh
+ * clone still builds. Such a build is fine to test and must not be published.
+ */
+val keystoreProperties = Properties().apply {
+    val file = rootProject.file("keystore.properties")
+    if (file.exists()) file.inputStream().use { stream -> load(stream) }
 }
 
 android {
@@ -14,7 +32,7 @@ android {
         minSdk = 26
         targetSdk = 36
         versionCode = 1
-        versionName = "0.1-step1"
+        versionName = "0.0.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -23,9 +41,30 @@ android {
         compose = true
     }
 
+    signingConfigs {
+        create("release") {
+            val store = keystoreProperties.getProperty("storeFile")
+            if (store != null) {
+                storeFile = file(store)
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
+            // Left off deliberately. R8 strips what it cannot see used, and
+            // this app reaches Room entities and Compose internals in ways it
+            // cannot always see. Turning it on is a change worth making on
+            // its own, against a device, not bundled into a first release.
             isMinifyEnabled = false
+            signingConfig = if (keystoreProperties.getProperty("storeFile") != null) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
         }
     }
 

@@ -9,3 +9,9 @@
 .externalNativeBuild
 .cxx
 .kotlin/
+
+# Release signing. The keystore lives outside the repo; neither it nor the
+# passwords ever go into git.
+/keystore.properties
+*.jks
+*.keystore
