@@ -58,6 +58,8 @@ object JsonRestore {
                 ?.takeIf { !it.isNaN() } ?: HealthySettings.DEFAULT_UNITS_PER_BEER,
             unitsPerWine = settingsJson?.optDouble("unitsPerWine")
                 ?.takeIf { !it.isNaN() } ?: HealthySettings.DEFAULT_UNITS_PER_WINE,
+            mlPerAlcoholUnit = settingsJson?.optDouble("mlPerAlcoholUnit")
+                ?.takeIf { !it.isNaN() } ?: com.healthy.app.core.Alcohol.DEFAULT_ML_PER_UNIT,
         )
 
         Result.Ok(

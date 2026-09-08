@@ -1,14 +1,13 @@
-package com.healthy.app.ui.today
+package com.healthy.app.ui.fluids
 
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.healthy.app.core.Alcohol
+import com.healthy.app.core.Beverage
+import com.healthy.app.core.BeverageCatalog
+import com.healthy.app.core.BeverageCategory
 import com.healthy.app.core.Caffeine
-import com.healthy.app.core.CatalogDrink
-import com.healthy.app.core.AlcoholKind
-import com.healthy.app.core.DrinkCatalog
-import com.healthy.app.core.FluidCatalog
-import com.healthy.app.core.FluidDrink
 import com.healthy.app.core.HealthyDay
 import com.healthy.app.data.HealthyDatabase
 import com.healthy.app.data.HealthySettings
@@ -28,7 +27,7 @@ import kotlinx.coroutines.launch
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 
-data class TodayState(
+data class FluidsState(
     val nowMg: Int = 0,
     val bedtimeMg: Int = 0,
     val bedtimeLabel: String = HealthySettings.DEFAULT_BEDTIME,
@@ -44,16 +43,23 @@ data class TodayState(
     /** Every dose still decaying into the window, needed to draw the curve. */
     val allDoses: List<Drink> = emptyList(),
     val halfLifeHours: Double = Caffeine.DEFAULT_HALF_LIFE_HOURS,
-    val catalog: List<CatalogDrink> = DrinkCatalog.BUILT_IN,
     val totalMg: Int = 0,
     val totalMl: Int = 0,
     val fluidTargetMl: Int = HealthySettings.DEFAULT_FLUID_TARGET_ML,
     val alcoholUnits: Double = 0.0,
-    val fluidCatalog: List<FluidDrink> = FluidCatalog.BUILT_IN,
+    /**
+     * The last five in each category, which is the whole point of the card:
+     * a person drinks the same handful of things and should not hunt for them
+     * among three hundred.
+     */
+    val recent: Map<BeverageCategory, List<Beverage>> = emptyMap(),
+    /** The user's own drinks, offered in every category's search. */
+    val custom: List<Beverage> = emptyList(),
+    val mlPerUnit: Double = Alcohol.DEFAULT_ML_PER_UNIT,
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
-class TodayViewModel(app: Application) : AndroidViewModel(app) {
+class FluidsViewModel(app: Application) : AndroidViewModel(app) {
 
     private val db = HealthyDatabase.get(app)
     private val drinks = db.drinkDao()
@@ -98,7 +104,7 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    val state: StateFlow<TodayState> =
+    val state: StateFlow<FluidsState> =
         combine(
             tick,
             settingsStore.settings,
@@ -112,18 +118,22 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
                 // starts the day at a false zero.
                 val lookback = (settings.halfLifeHours * 6 * MILLIS_PER_HOUR).toLong()
 
-                drinks.observeDecayWindow(dayStart - lookback, dayEnd).map { all ->
+                combine(
+                    drinks.observeDecayWindow(dayStart - lookback, dayEnd),
+                    recentByCategory(),
+                ) { all, recent ->
                     build(
                         now = now,
                         settings = settings,
-                        custom = custom.map { CatalogDrink(it.name, it.mg, it.volumeMl) },
+                        custom = custom.map(::asBeverage),
+                        recent = recent,
                         all = all,
                         dayStart = dayStart,
                         dayEnd = dayEnd,
                     )
                 }
             }
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), TodayState())
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), FluidsState())
 
     private data class Inputs(
         val now: Long,
@@ -131,20 +141,77 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
         val custom: List<com.healthy.app.data.entity.CustomDrink>,
     )
 
+    /**
+     * Each category's recent five, as beverages ready to be logged again.
+     *
+     * A recent row names a drink; the catalog supplies its strength. When the
+     * name is not in the catalog — a custom drink, or something scanned — the
+     * strength is recovered from the row itself, so a scanned Hell comes back
+     * with the figures the user corrected rather than a catalog guess.
+     */
+    private fun recentByCategory(): kotlinx.coroutines.flow.Flow<Map<BeverageCategory, List<Beverage>>> {
+        val perCategory: List<kotlinx.coroutines.flow.Flow<Pair<BeverageCategory, List<Beverage>>>> =
+            BeverageCategory.entries.map { category ->
+                drinks.observeRecent(category.name.lowercase(), RECENT_COUNT).map { rows ->
+                    category to rows.map { row -> asBeverage(row, category) }
+                }
+            }
+        return combine(perCategory) { pairs -> pairs.toMap() }
+    }
+
+    private fun asBeverage(
+        row: com.healthy.app.data.entity.RecentDrink,
+        category: BeverageCategory,
+    ): Beverage {
+        val known = BeverageCatalog.byName(row.name)
+        if (known != null) return known.copy(defaultMl = row.volumeMl.takeIf { it > 0 } ?: known.defaultMl)
+
+        // Not in the catalog. The row holds a total, not a rate, so the rate
+        // is recovered by dividing — and a zero volume means a solid, whose
+        // figures are already per whatever it was.
+        val ml = row.volumeMl
+        return Beverage(
+            name = row.name,
+            category = category,
+            defaultMl = ml.takeIf { it > 0 } ?: 100,
+            caffeinePer100 = if (ml > 0) row.mg * 100.0 / ml else row.mg.toDouble(),
+            abv = if (ml > 0 && row.alcoholUnits > 0) {
+                row.alcoholUnits * Alcohol.DEFAULT_ML_PER_UNIT * 100.0 / ml
+            } else {
+                0.0
+            },
+            solid = ml <= 0 && row.mg > 0,
+        )
+    }
+
+    private fun asBeverage(custom: com.healthy.app.data.entity.CustomDrink): Beverage =
+        Beverage(
+            name = custom.name,
+            category = if (custom.mg > 0) BeverageCategory.Caffeine else BeverageCategory.Water,
+            defaultMl = custom.volumeMl.takeIf { it > 0 } ?: 100,
+            caffeinePer100 = if (custom.volumeMl > 0) {
+                custom.mg * 100.0 / custom.volumeMl
+            } else {
+                custom.mg.toDouble()
+            },
+            solid = custom.volumeMl <= 0 && custom.mg > 0,
+        )
+
     private fun build(
         now: Long,
         settings: HealthySettings,
-        custom: List<CatalogDrink>,
+        custom: List<Beverage>,
+        recent: Map<BeverageCategory, List<Beverage>>,
         all: List<Drink>,
         dayStart: Long,
         dayEnd: Long,
-    ): TodayState {
+    ): FluidsState {
         val bedtimeMillis = nextBedtime(now, settings.targetBedtime)
         val bedtimeMg = Caffeine.levelAt(all, bedtimeMillis, settings.halfLifeHours)
         val curve = Caffeine.curve(all, dayStart, dayEnd, settings.halfLifeHours)
         val today = all.filter { it.timestamp in dayStart until dayEnd }
 
-        return TodayState(
+        return FluidsState(
             nowMg = Caffeine.levelAt(all, now, settings.halfLifeHours).toInt(),
             bedtimeMg = Math.round(bedtimeMg).toInt(),
             bedtimeLabel = settings.targetBedtime,
@@ -161,11 +228,13 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
             entries = today.sortedByDescending { it.timestamp },
             allDoses = all,
             halfLifeHours = settings.halfLifeHours,
-            catalog = DrinkCatalog.BUILT_IN + custom,
             totalMg = today.sumOf { it.mg },
             totalMl = today.sumOf { it.volumeMl },
             fluidTargetMl = settings.fluidTargetMl,
             alcoholUnits = today.sumOf { it.alcoholUnits },
+            recent = recent,
+            custom = custom,
+            mlPerUnit = settings.mlPerAlcoholUnit,
         )
     }
 
@@ -184,47 +253,30 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Logs a drink with no caffeine (spec 9.2). A beer or a wine also adds to
-     * the day's alcohol units, which the morning screen then reads rather than
-     * asking the user to type again (spec 9.4).
+     * Logs [beverage] at the amount the carousel settled on.
+     *
+     * One row carries all three: the caffeine that feeds the curve, the fluid
+     * that fills the bar, and the units the morning screen reads rather than
+     * asking the user to type again (spec 9.1 and 9.4). Every figure scales
+     * with the amount, which is the reason the carousel exists — a 500 ml can
+     * is not a 250 ml can with a different label.
      */
-    fun logFluid(drink: FluidDrink) {
+    fun log(beverage: Beverage, amount: Int) {
         viewModelScope.launch {
             val settings = settingsStore.settings.first()
-            val units = when (drink.alcoholUnitsKey) {
-                AlcoholKind.None -> 0.0
-                AlcoholKind.Beer -> settings.unitsPerBeer
-                AlcoholKind.Wine -> settings.unitsPerWine
-            }
             val now = System.currentTimeMillis()
+            val fluid = beverage.fluidMlFor(amount)
             val row = Drink(
-                name = drink.name,
-                mg = 0,
+                name = beverage.name,
+                mg = beverage.caffeineMgFor(amount),
                 timestamp = now,
-                volumeMl = drink.volumeMl,
-                alcoholUnits = units,
-            )
-            val id = drinks.insert(row)
-            _lastLogged.value = row.copy(id = id)
-            writer.writeHydration(drink.volumeMl, now, now)
-            tick.value = System.currentTimeMillis()
-        }
-    }
-
-    /** One tap logs the caffeine and the fluid together (spec 9.1). */
-    fun log(drink: CatalogDrink) {
-        viewModelScope.launch {
-            val now = System.currentTimeMillis()
-            val row = Drink(
-                name = drink.name,
-                mg = drink.mg,
-                timestamp = now,
-                volumeMl = drink.volumeMl,
+                volumeMl = fluid,
+                alcoholUnits = Alcohol.units(amount, beverage.abv, settings.mlPerAlcoholUnit),
             )
             val id = drinks.insert(row)
             _lastLogged.value = row.copy(id = id)
             // Mirror the fluid into Health Connect so other apps see it too.
-            if (drink.volumeMl > 0) writer.writeHydration(drink.volumeMl, now, now)
+            if (fluid > 0) writer.writeHydration(fluid, now, now)
             tick.value = System.currentTimeMillis()
         }
     }
@@ -254,5 +306,8 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
         const val MILLIS_PER_HOUR = 3_600_000.0
         /** Spec 5.2 asks for energy "at approximately 15:00". */
         const val ENERGY_PROMPT_HOUR = 15
+
+        /** How many drinks each category remembers. The user asked for five. */
+        const val RECENT_COUNT = 5
     }
 }

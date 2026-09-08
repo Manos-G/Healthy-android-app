@@ -26,8 +26,21 @@ data class HealthySettings(
     /** Millilitres. No notification and no streak when below it (spec 9.3). */
     val fluidTargetMl: Int = DEFAULT_FLUID_TARGET_ML,
     /** A unit means different things by country, so both are settings (spec 9.4). */
+    /**
+     * Superseded by [mlPerAlcoholUnit]. Kept so existing backups still restore
+     * and the export round trip stays honest; nothing reads them to log a
+     * drink any more, because a fixed "units per beer" cannot survive a
+     * volume the user chooses.
+     */
     val unitsPerBeer: Double = DEFAULT_UNITS_PER_BEER,
     val unitsPerWine: Double = DEFAULT_UNITS_PER_WINE,
+
+    /**
+     * Millilitres of pure ethanol in one unit. 10 in the UK, near 17.7 in the
+     * United States. A unit means different things in different countries,
+     * which is what spec 9.4 was getting at.
+     */
+    val mlPerAlcoholUnit: Double = com.healthy.app.core.Alcohol.DEFAULT_ML_PER_UNIT,
     /** none, hold or change (spec 8.5). The default is no goal. */
     val goalMode: String = GOAL_NONE,
     val goalHoldKg: Double? = null,
@@ -82,6 +95,8 @@ class SettingsStore(private val context: Context) {
             fluidTargetMl = prefs[KEY_FLUID_TARGET] ?: HealthySettings.DEFAULT_FLUID_TARGET_ML,
             unitsPerBeer = prefs[KEY_UNITS_BEER] ?: HealthySettings.DEFAULT_UNITS_PER_BEER,
             unitsPerWine = prefs[KEY_UNITS_WINE] ?: HealthySettings.DEFAULT_UNITS_PER_WINE,
+            mlPerAlcoholUnit = prefs[KEY_ML_PER_UNIT]
+                ?: com.healthy.app.core.Alcohol.DEFAULT_ML_PER_UNIT,
             goalMode = prefs[KEY_GOAL_MODE] ?: HealthySettings.GOAL_NONE,
             goalHoldKg = prefs[KEY_GOAL_HOLD],
             goalRateKgPerWeek = prefs[KEY_GOAL_RATE],
@@ -112,6 +127,8 @@ class SettingsStore(private val context: Context) {
     suspend fun setUnitsPerBeer(value: Double) = edit { it[KEY_UNITS_BEER] = value }
 
     suspend fun setUnitsPerWine(value: Double) = edit { it[KEY_UNITS_WINE] = value }
+
+    suspend fun setMlPerAlcoholUnit(value: Double) = edit { it[KEY_ML_PER_UNIT] = value }
 
     suspend fun setTrackCycle(value: Boolean) = edit { it[KEY_TRACK_CYCLE] = value }
 
@@ -169,6 +186,7 @@ class SettingsStore(private val context: Context) {
         val KEY_FLUID_TARGET: Preferences.Key<Int> = intPreferencesKey("fluid_target_ml")
         val KEY_UNITS_BEER: Preferences.Key<Double> = doublePreferencesKey("units_per_beer")
         val KEY_UNITS_WINE: Preferences.Key<Double> = doublePreferencesKey("units_per_wine")
+        val KEY_ML_PER_UNIT: Preferences.Key<Double> = doublePreferencesKey("ml_per_alcohol_unit")
         val KEY_GOAL_MODE: Preferences.Key<String> = stringPreferencesKey("goal_mode")
         val KEY_GOAL_HOLD: Preferences.Key<Double> = doublePreferencesKey("goal_hold_kg")
         val KEY_GOAL_RATE: Preferences.Key<Double> = doublePreferencesKey("goal_rate_kg_week")

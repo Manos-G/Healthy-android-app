@@ -1,4 +1,4 @@
-package com.healthy.app.ui.today
+package com.healthy.app.ui.fluids
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -36,7 +36,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.healthy.app.core.CatalogDrink
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import com.healthy.app.core.Alcohol
+import com.healthy.app.core.Beverage
+import com.healthy.app.core.BeverageCategory
 import com.healthy.app.data.entity.Drink
 import com.healthy.app.data.entity.Night
 import com.healthy.app.ui.components.RatingScale
@@ -52,20 +56,25 @@ private fun Long.asClock(): String =
     Instant.ofEpochMilli(this).atZone(ZoneId.systemDefault()).toLocalTime().format(HHMM)
 
 @Composable
-fun TodayScreen(
+fun FluidsScreen(
     snackbars: SnackbarHostState,
     modifier: Modifier = Modifier,
-    vm: TodayViewModel = viewModel(),
+    vm: FluidsViewModel = viewModel(),
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
     val lastLogged by vm.lastLogged.collectAsStateWithLifecycle()
     val energyPrompt by vm.energyPrompt.collectAsStateWithLifecycle()
 
+    // The drink whose amount is being chosen, and the category whose full list
+    // is open. Only one of each can be true at a time.
+    var picking by remember { mutableStateOf<Beverage?>(null) }
+    var browsing by remember { mutableStateOf<BeverageCategory?>(null) }
+
     // One tap logs; the snackbar is the only chance to take it back (spec 5.1).
     LaunchedEffect(lastLogged) {
         val logged = lastLogged ?: return@LaunchedEffect
         val result = snackbars.showSnackbar(
-            message = "${logged.name}, ${logged.mg} mg",
+            message = loggedSummary(logged),
             actionLabel = "Undo",
         )
         if (result == SnackbarResult.ActionPerformed) vm.undoLast() else vm.clearSnackbar()
@@ -82,8 +91,18 @@ fun TodayScreen(
                 EnergyPromptCard(night) { rating -> vm.rateEnergy(night.date, rating) }
             }
         }
-        item { FluidCard(state, vm::logFluid) }
-        item { CatalogCard(state.catalog, vm::log) }
+        item { FluidCard(state) }
+        BeverageCategory.entries.forEach { category ->
+            item {
+                CategoryCard(
+                    category = category,
+                    recent = state.recent[category].orEmpty(),
+                    mlPerUnit = state.mlPerUnit,
+                    onPick = { picking = it },
+                    onBrowse = { browsing = category },
+                )
+            }
+        }
         item { EntriesCard(state.entries, vm::delete) }
         item {
             com.healthy.app.scan.ScanButton(modifier = Modifier.fillMaxWidth())
@@ -94,6 +113,42 @@ fun TodayScreen(
             )
         }
     }
+
+    browsing?.let { category ->
+        BeveragePicker(
+            category = category,
+            custom = state.custom,
+            mlPerUnit = state.mlPerUnit,
+            onPick = { drink ->
+                browsing = null
+                picking = drink
+            },
+            onDismiss = { browsing = null },
+        )
+    }
+
+    picking?.let { drink ->
+        AmountDialog(
+            beverage = drink,
+            mlPerUnit = state.mlPerUnit,
+            startMl = drink.defaultMl,
+            onConfirm = { amount ->
+                picking = null
+                vm.log(drink, amount)
+            },
+            onDismiss = { picking = null },
+        )
+    }
+}
+
+/** What the snackbar says, which depends on what the drink actually was. */
+private fun loggedSummary(logged: Drink): String {
+    val parts = buildList {
+        logged.mg.takeIf { it > 0 }?.let { add("$it mg") }
+        logged.volumeMl.takeIf { it > 0 }?.let { add("$it ml") }
+        logged.alcoholUnits.takeIf { it > 0 }?.let { add("${"%.1f".format(it)} units") }
+    }
+    return logged.name + if (parts.isEmpty()) "" else ", " + parts.joinToString(", ")
 }
 
 /**
@@ -139,7 +194,7 @@ private fun SectionCard(content: @Composable ColumnScope.() -> Unit) {
 }
 
 @Composable
-private fun HeroCard(state: TodayState) {
+private fun HeroCard(state: FluidsState) {
     SectionCard {
         Text(
             "Caffeine in your body now",
@@ -234,9 +289,15 @@ private fun Verdict(isClear: Boolean) {
  * streak. Caffeinated drinks already counted themselves when they were logged
  * (spec 9.1), so these buttons are only for the ones with no caffeine.
  */
-@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+/**
+ * Fluid and alcohol for the day (spec 9.3, 9.4).
+ *
+ * A bar that fills, and nothing else: no notification when below target and no
+ * streak. The drinks themselves moved to the three category cards below, so
+ * this states totals only.
+ */
 @Composable
-private fun FluidCard(state: TodayState, onLog: (com.healthy.app.core.FluidDrink) -> Unit) {
+private fun FluidCard(state: FluidsState) {
     SectionCard {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -275,15 +336,71 @@ private fun FluidCard(state: TodayState, onLog: (com.healthy.app.core.FluidDrink
                 modifier = Modifier.padding(top = 8.dp),
             )
         }
+    }
+}
+
+/**
+ * One category, showing only what this person actually drinks.
+ *
+ * Three hundred drinks are available and five are on screen: the last five
+ * logged in this category, newest first. Everything else is one tap away
+ * behind the search. A category with no history yet opens with a few sensible
+ * starters rather than an empty card that teaches nothing.
+ *
+ * Every drink here opens the amount carousel rather than logging on the spot.
+ * That is one extra tap and it buys the thing the old catalog could not do:
+ * the same beer in a bottle and in a pint are different drinks, and the app
+ * now knows which one it was.
+ */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun CategoryCard(
+    category: BeverageCategory,
+    recent: List<Beverage>,
+    mlPerUnit: Double,
+    onPick: (Beverage) -> Unit,
+    onBrowse: () -> Unit,
+) {
+    val shown = remember(category, recent) {
+        if (recent.isNotEmpty()) recent else starters(category)
+    }
+
+    SectionCard {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                category.label,
+                color = HealthyColors.Paper,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.SemiBold,
+            )
+            androidx.compose.material3.TextButton(onClick = onBrowse) {
+                Text("All drinks", color = HealthyColors.Sleep, fontSize = 12.sp)
+            }
+        }
+        Text(
+            if (recent.isEmpty()) {
+                "Nothing logged here yet. These are a start; your last five appear " +
+                    "once you have used it."
+            } else {
+                "Your last ${recent.size}. Tap one to choose how much."
+            },
+            color = HealthyColors.Muted,
+            fontSize = 11.sp,
+            modifier = Modifier.padding(bottom = 10.dp),
+        )
 
         androidx.compose.foundation.layout.FlowRow(
-            modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+            modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            state.fluidCatalog.forEach { drink ->
+            shown.forEach { drink ->
                 OutlinedButton(
-                    onClick = { onLog(drink) },
+                    onClick = { onPick(drink) },
                     shape = RoundedCornerShape(10.dp),
                     colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(
                         containerColor = HealthyColors.Raised2,
@@ -295,12 +412,16 @@ private fun FluidCard(state: TodayState, onLog: (com.healthy.app.core.FluidDrink
                         vertical = 8.dp,
                     ),
                 ) {
-                    Column {
-                        Text(drink.name, fontSize = 13.sp)
+                    Column(horizontalAlignment = Alignment.Start) {
+                        Text(drink.name, fontSize = 13.sp, textAlign = TextAlign.Start)
                         Text(
-                            "${drink.volumeMl} ml",
+                            badge(drink, mlPerUnit),
                             fontSize = 11.sp,
-                            color = HealthyColors.Sleep,
+                            color = when (category) {
+                                BeverageCategory.Caffeine -> HealthyColors.Caffeine
+                                BeverageCategory.Alcohol -> HealthyColors.Warn
+                                BeverageCategory.Water -> HealthyColors.Sleep
+                            },
                         )
                     }
                 }
@@ -309,60 +430,40 @@ private fun FluidCard(state: TodayState, onLog: (com.healthy.app.core.FluidDrink
     }
 }
 
-@Composable
-private fun CatalogCard(catalog: List<CatalogDrink>, onLog: (CatalogDrink) -> Unit) {
-    SectionCard {
-        Text(
-            "One tap logs it now",
-            color = HealthyColors.Paper,
-            fontSize = 15.sp,
-            fontWeight = FontWeight.SemiBold,
-        )
-        Text(
-            "Caffeine and fluid are recorded together.",
-            color = HealthyColors.Muted,
-            fontSize = 12.sp,
-            modifier = Modifier.padding(top = 2.dp, bottom = 12.dp),
-        )
-        // A plain wrapping row rather than a nested LazyVerticalGrid, which
-        // cannot measure inside a LazyColumn item.
-        FlowGrid(catalog, onLog)
+/** The button's second line: what one of these does, at the size shown. */
+private fun badge(drink: Beverage, mlPerUnit: Double): String {
+    val ml = drink.defaultMl
+    return when {
+        drink.abv > 0 ->
+            "$ml ml · ${"%.1f".format(Alcohol.units(ml, drink.abv, mlPerUnit))} units"
+        drink.caffeinePer100 > 0 -> "$ml ${drink.unit} · ${drink.caffeineMgFor(ml)} mg"
+        else -> "$ml ml"
     }
 }
 
-@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
-@Composable
-private fun FlowGrid(catalog: List<CatalogDrink>, onLog: (CatalogDrink) -> Unit) {
-    androidx.compose.foundation.layout.FlowRow(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        catalog.forEach { drink ->
-            OutlinedButton(
-                onClick = { onLog(drink) },
-                shape = RoundedCornerShape(10.dp),
-                colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(
-                    containerColor = HealthyColors.Raised2,
-                    contentColor = HealthyColors.Paper,
-                ),
-                border = androidx.compose.foundation.BorderStroke(1.dp, HealthyColors.Rule),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(
-                    horizontal = 12.dp,
-                    vertical = 8.dp,
-                ),
-            ) {
-                Column(horizontalAlignment = Alignment.Start) {
-                    Text(drink.name, fontSize = 13.sp, textAlign = TextAlign.Start)
-                    Text(
-                        "${drink.mg} mg",
-                        fontSize = 11.sp,
-                        color = HealthyColors.Caffeine,
-                    )
-                }
-            }
-        }
+/**
+ * What a category offers before it knows anything about this user.
+ *
+ * Drawn from the catalog by name rather than written out again, so there is
+ * still only one place a drink's figures are stated.
+ */
+private fun starters(category: BeverageCategory): List<Beverage> {
+    val names = when (category) {
+        BeverageCategory.Water ->
+            listOf("Water, glass", "Water, bottle", "Sparkling water", "Orange juice", "Herbal infusion")
+        BeverageCategory.Caffeine ->
+            listOf("Freddo espresso", "Greek coffee", "Filter coffee", "Black tea", "Coca-Cola")
+        BeverageCategory.Alcohol ->
+            listOf("Lager", "Red wine, glass", "White wine, glass", "Ouzo, shot", "Tsipouro")
     }
+    return names.mapNotNull(com.healthy.app.core.BeverageCatalog::byName)
+}
+
+/** The one figure that matters for this row. */
+private fun entryFigure(entry: Drink): String = when {
+    entry.alcoholUnits > 0 -> "%.1f units".format(entry.alcoholUnits)
+    entry.mg > 0 -> "${entry.mg} mg"
+    else -> "${entry.volumeMl} ml"
 }
 
 @Composable
@@ -400,9 +501,15 @@ private fun EntriesCard(entries: List<Drink>, onDelete: (Drink) -> Unit) {
                     fontSize = 14.sp,
                     modifier = Modifier.weight(1f),
                 )
+                // Whatever this drink actually contributed. A row that shows
+                // "0 mg" against a beer says nothing useful about the beer.
                 Text(
-                    "${entry.mg} mg",
-                    color = HealthyColors.Caffeine,
+                    entryFigure(entry),
+                    color = when {
+                        entry.alcoholUnits > 0 -> HealthyColors.Warn
+                        entry.mg > 0 -> HealthyColors.Caffeine
+                        else -> HealthyColors.Sleep
+                    },
                     fontSize = 13.sp,
                 )
                 IconButton(onClick = { onDelete(entry) }) {

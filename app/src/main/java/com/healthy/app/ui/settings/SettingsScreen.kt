@@ -94,19 +94,17 @@ fun SettingsScreen(
                     hint = "The bar fills towards this. Nothing is sent when you are below it.",
                 ) { it.toIntOrNull()?.let(vm::setFluidTarget) }
                 EditableField(
-                    label = "Units in one beer",
-                    value = "%.1f".format(settings.unitsPerBeer),
+                    label = "Millilitres of alcohol in one unit",
+                    value = "%.1f".format(settings.mlPerAlcoholUnit),
                     numeric = true,
-                    hint = "A unit means different things between countries.",
-                ) { it.toDoubleOrNull()?.let(vm::setUnitsPerBeer) }
-                EditableField(
-                    label = "Units in one glass of wine",
-                    value = "%.1f".format(settings.unitsPerWine),
-                    numeric = true,
-                ) { it.toDoubleOrNull()?.let(vm::setUnitsPerWine) }
+                    hint = "10 in the UK. Near 17.7 for a US standard drink. " +
+                        "A unit means different things between countries.",
+                ) { it.toDoubleOrNull()?.let(vm::setMlPerAlcoholUnit) }
                 Text(
-                    "These apply to drinks logged from now on. What you have already " +
-                        "logged keeps the units it was recorded with.",
+                    "Units are worked out from how much you poured and how strong it " +
+                        "was, so a pint and a bottle of the same beer are no longer the " +
+                        "same drink. This applies to drinks logged from now on; what you " +
+                        "have already logged keeps the units it was recorded with.",
                     color = HealthyColors.Muted,
                     fontSize = 11.sp,
                     modifier = Modifier.padding(top = 10.dp),

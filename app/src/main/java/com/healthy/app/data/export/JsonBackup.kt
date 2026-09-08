@@ -61,7 +61,8 @@ object JsonBackup {
                 .put("bedtimeLimitMg", data.settings.bedtimeLimitMg)
                 .put("fluidTargetMl", data.settings.fluidTargetMl)
                 .put("unitsPerBeer", data.settings.unitsPerBeer)
-                .put("unitsPerWine", data.settings.unitsPerWine),
+                .put("unitsPerWine", data.settings.unitsPerWine)
+                .put("mlPerAlcoholUnit", data.settings.mlPerAlcoholUnit),
         )
 
         root.put("nights", data.nights.map { n ->

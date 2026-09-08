@@ -7,7 +7,7 @@ import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.InsertChartOutlined
 import androidx.compose.material.icons.filled.MonitorWeight
 import androidx.compose.material.icons.filled.Restaurant
-import androidx.compose.material.icons.filled.LocalCafe
+import androidx.compose.material.icons.filled.LocalDrink
 import androidx.compose.material.icons.filled.WbSunny
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -32,7 +32,7 @@ import androidx.compose.ui.unit.sp
 import com.healthy.app.ui.data.DataScreen
 import com.healthy.app.ui.morning.MorningScreen
 import com.healthy.app.ui.theme.HealthyColors
-import com.healthy.app.ui.today.TodayScreen
+import com.healthy.app.ui.fluids.FluidsScreen
 import com.healthy.app.ui.trends.TrendsScreen
 import com.healthy.app.ui.weight.WeightScreen
 
@@ -45,7 +45,7 @@ import com.healthy.app.ui.weight.WeightScreen
  * is the point at which a real nav graph earns its cost.
  */
 private enum class Tab(val label: String, val icon: ImageVector) {
-    Today("Today", Icons.Filled.LocalCafe),
+    Fluids("Fluids", Icons.Filled.LocalDrink),
     Morning("Morning", Icons.Filled.WbSunny),
     Food("Food", Icons.Filled.Restaurant),
     Weight("Weight", Icons.Filled.MonitorWeight),
@@ -56,7 +56,7 @@ private enum class Tab(val label: String, val icon: ImageVector) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HealthyApp(openNight: com.healthy.app.NightRequest? = null) {
-    var tab by remember { mutableStateOf(Tab.Today) }
+    var tab by remember { mutableStateOf(Tab.Fluids) }
 
     // A notification tap opens the morning screen at that night, never the
     // Today screen (spec 14.3).
@@ -73,7 +73,7 @@ fun HealthyApp(openNight: com.healthy.app.NightRequest? = null) {
                 title = {
                     Text(
                         when (tab) {
-                            Tab.Today -> "Healthy"
+                            Tab.Fluids -> "Healthy"
                             Tab.Morning -> "Last night"
                             Tab.Food -> "Food"
                             Tab.Weight -> "Weight"
@@ -111,7 +111,7 @@ fun HealthyApp(openNight: com.healthy.app.NightRequest? = null) {
         },
     ) { padding ->
         when (tab) {
-            Tab.Today -> TodayScreen(
+            Tab.Fluids -> FluidsScreen(
                 snackbars = snackbars,
                 modifier = Modifier.fillMaxSize().padding(padding),
             )

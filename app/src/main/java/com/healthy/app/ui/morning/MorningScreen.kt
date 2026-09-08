@@ -351,7 +351,7 @@ private fun AlertnessCard(form: MorningForm, vm: MorningViewModel) {
             modifier = Modifier.padding(top = 12.dp),
         ) { picked -> vm.update { it.copy(alertness = picked) } }
         Text(
-            "Your 15:00 energy is asked for on the Today screen this afternoon. You cannot know it yet.",
+            "Your 15:00 energy is asked for on the Fluids screen this afternoon. You cannot know it yet.",
             color = HealthyColors.Muted,
             fontSize = 11.sp,
             modifier = Modifier.padding(top = 10.dp),

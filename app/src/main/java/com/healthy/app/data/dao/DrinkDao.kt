@@ -6,6 +6,7 @@ import androidx.room.Insert
 import androidx.room.Query
 import androidx.room.Update
 import com.healthy.app.data.entity.Drink
+import com.healthy.app.data.entity.RecentDrink
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -58,4 +59,31 @@ interface DrinkDao {
 
     @Query("SELECT MAX(timestamp) FROM drink WHERE timestamp >= :from AND timestamp < :to")
     suspend fun lastDoseTime(from: Long, to: Long): Long?
+
+    /**
+     * The last few distinct drinks in one category, newest first.
+     *
+     * The category is read off the row rather than stored: a row with alcohol
+     * units is a drink, a row with caffeine and none is a coffee, and a row
+     * with neither is water. That keeps the recent lists working for every
+     * drink already logged, with no migration and no back-fill.
+     *
+     * SQLite takes the bare columns from the row that supplied MAX(timestamp),
+     * so the volume and strength returned are the ones last actually used.
+     */
+    @Query(
+        """
+        SELECT name, volumeMl, mg, alcoholUnits, MAX(timestamp) AS lastAt
+        FROM drink
+        WHERE CASE :category
+            WHEN 'alcohol' THEN alcoholUnits > 0
+            WHEN 'caffeine' THEN alcoholUnits <= 0 AND mg > 0
+            ELSE alcoholUnits <= 0 AND mg <= 0
+        END
+        GROUP BY name
+        ORDER BY lastAt DESC
+        LIMIT :limit
+        """
+    )
+    fun observeRecent(category: String, limit: Int): Flow<List<RecentDrink>>
 }

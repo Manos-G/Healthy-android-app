@@ -7,8 +7,8 @@ import androidx.room.PrimaryKey
 /**
  * A drink the user added themselves (spec 7).
  *
- * The twenty built-in drinks are constants in
- * [com.healthy.app.core.DrinkCatalog]; only the user's own additions need
+ * The built-in drinks are constants in
+ * [com.healthy.app.core.BeverageCatalog]; only the user's own additions need
  * storage. Both appear together in the catalog grid.
  */
 @Entity(tableName = "custom_drink")

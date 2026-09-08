@@ -54,13 +54,7 @@ class CaffeineTest {
         assertTrue(curve.zipWithNext().all { (a, b) -> b <= a + 1e-9 })
     }
 
-    @Test
-    fun `catalog matches the twenty drinks in the spec`() {
-        assertEquals(20, DrinkCatalog.BUILT_IN.size)
-        val freddo = DrinkCatalog.BUILT_IN.first { it.name == "Freddo espresso" }
-        assertEquals(125, freddo.mg)
-        assertEquals(200, freddo.volumeMl)
-        // Dark chocolate carries caffeine but is not a fluid (spec 9.1).
-        assertEquals(0, DrinkCatalog.BUILT_IN.first { it.name.startsWith("Dark chocolate") }.volumeMl)
-    }
+    // The catalog's own assertions moved to BeverageCatalogTest, which checks
+    // all twenty of spec 7 against the strengths that replaced their fixed
+    // milligram figures.
 }

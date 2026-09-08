@@ -1,4 +1,4 @@
-package com.healthy.app.ui.today
+package com.healthy.app.ui.fluids
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.Composable
@@ -19,7 +19,7 @@ import com.healthy.app.ui.theme.HealthyColors
  */
 @Composable
 fun CaffeineCurve(
-    state: TodayState,
+    state: FluidsState,
     modifier: Modifier = Modifier,
 ) {
     val doses = state.allDoses
