@@ -32,8 +32,31 @@ class QrLinkTest {
     fun `a link round trips back to the same payload`() {
         val payload = QrPayload.encode(recipe, items, products)
         val link = QrPayload.toLink(payload)
-        assertTrue(link.startsWith("https://healthy.app/i#"))
+        // Our own scheme. An https link was swallowed by Messenger's in-app
+        // browser and landed on a domain nobody here owns.
+        assertTrue(link, link.startsWith("healthy://i#"))
         assertEquals(payload, QrPayload.fromLink(link))
+    }
+
+    /**
+     * The route that has to work when nothing else does: the receiver pastes
+     * the whole chat message, code buried in the middle of it.
+     */
+    @Test
+    fun `a pasted message with the code inside it is understood`() {
+        val code = QrPayload.toCode(QrPayload.encode(recipe, items, products))
+        val message = "Pancakes — a recipe from Healthy.\n\n$code\n\n" +
+            "To add it: open Healthy, Food tab, \"Paste a shared item\"."
+        val dish = QrPayload.decodeAny(message) as QrPayload.Decoded.Dish
+        assertEquals("Pancakes", dish.recipe.name)
+        assertEquals(2, dish.items.size)
+    }
+
+    @Test
+    fun `a bare code pasted on its own works too`() {
+        val code = QrPayload.toCode(QrPayload.encode(recipe, items, products))
+        assertTrue(QrPayload.decodeAny(code) is QrPayload.Decoded.Dish)
+        assertTrue(QrPayload.decodeAny("  $code  ") is QrPayload.Decoded.Dish)
     }
 
     /**
@@ -62,8 +85,8 @@ class QrLinkTest {
 
     @Test
     fun `compression keeps a real recipe short enough to paste`() {
-        val link = QrPayload.toLink(QrPayload.encode(recipe, items, products))
-        assertTrue("link was ${link.length} characters", link.length < 600)
+        val code = QrPayload.toCode(QrPayload.encode(recipe, items, products))
+        assertTrue("code was ${code.length} characters", code.length < 600)
     }
 
     @Test
@@ -75,6 +98,7 @@ class QrLinkTest {
     @Test
     fun `someone else's link is refused rather than half read`() {
         assertNull(QrPayload.fromLink("https://example.com/i#abc"))
-        assertTrue(QrPayload.decodeAny("just some text") is QrPayload.Decoded.NotOurs)
+        assertNull(QrPayload.fromCode("not-a-real-code"))
+        assertTrue(QrPayload.decodeAny("just some chat text") is QrPayload.Decoded.NotOurs)
     }
 }

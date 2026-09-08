@@ -146,10 +146,15 @@ private fun shareItem(
     title: String,
     bitmap: Bitmap?,
 ) {
-    val link = QrPayload.toLink(payload)
-    val message = "$title — a recipe from Healthy.\n\n$link\n\n" +
-        "Open the link with Healthy installed and it is added to yours. " +
-        "The link holds the recipe itself; it is not fetched from anywhere."
+    // The code on its own line and nothing after it, so a long-press selects
+    // it cleanly. Messenger will not make a healthy:// link tappable, so the
+    // code — not the link — is what the instructions point at.
+    val message = buildString {
+        append("$title — a recipe from Healthy.\n\n")
+        append(QrPayload.toCode(payload))
+        append("\n\nTo add it: open Healthy, Food tab, \"Paste a shared item\". ")
+        append("The code holds the whole recipe, so nothing is downloaded.")
+    }
 
     val imageUri = bitmap?.let { runCatching { cacheQr(context, it, title) }.getOrNull() }
 

@@ -21,75 +21,6 @@ object QrPayload {
     /** Marks the payload as this app's, so a random QR is rejected politely. */
     const val MAGIC = "healthy"
 
-    /**
-     * A link that carries the whole item, for sending through a messenger.
-     *
-     * A QR code only works when both people are in the same room: a square
-     * sent through Messenger arrives on the reader's own screen, and a phone
-     * cannot scan itself. So the same payload also travels as a link, which
-     * opens the app and imports what it holds.
-     *
-     * The payload is deflated before base64 because JSON of this shape
-     * compresses to roughly a third, and the difference decides whether a
-     * dozen ingredients fit in something a person is willing to paste.
-     *
-     * `https` rather than a private scheme so it stays a tappable link
-     * everywhere; the host is never contacted, and nothing is sent to it.
-     */
-    const val LINK_HOST = "healthy.app"
-    private const val LINK_PREFIX = "https://$LINK_HOST/i#"
-
-    fun toLink(payload: String): String {
-        val deflater = java.util.zip.Deflater(java.util.zip.Deflater.BEST_COMPRESSION)
-        val bytes = payload.toByteArray(Charsets.UTF_8)
-        deflater.setInput(bytes)
-        deflater.finish()
-        val out = java.io.ByteArrayOutputStream(bytes.size)
-        val buffer = ByteArray(4096)
-        while (!deflater.finished()) out.write(buffer, 0, deflater.deflate(buffer))
-        deflater.end()
-        // java.util.Base64, not android.util: available from API 26, which is
-        // minSdk, and it keeps this whole class testable on a plain JVM.
-        val encoded = java.util.Base64.getUrlEncoder().withoutPadding()
-            .encodeToString(out.toByteArray())
-        return LINK_PREFIX + encoded
-    }
-
-    /** The payload back out of a link, or null if it is not one of ours. */
-    fun fromLink(link: String): String? {
-        val marker = link.indexOf("#")
-        if (marker < 0 || !link.startsWith("https://$LINK_HOST/")) return null
-        val encoded = link.substring(marker + 1).trim()
-        if (encoded.isEmpty()) return null
-        return runCatching {
-            val raw = java.util.Base64.getUrlDecoder().decode(encoded)
-            val inflater = java.util.zip.Inflater()
-            inflater.setInput(raw)
-            val out = java.io.ByteArrayOutputStream(raw.size * 4)
-            val buffer = ByteArray(4096)
-            while (!inflater.finished()) {
-                val n = inflater.inflate(buffer)
-                if (n == 0 && inflater.needsInput()) break
-                out.write(buffer, 0, n)
-            }
-            inflater.end()
-            out.toString(Charsets.UTF_8.name())
-        }.getOrNull()
-    }
-
-    /**
-     * Accepts either form: a raw payload from a scanned square, or a link
-     * pasted out of a chat. The user should not have to know the difference.
-     */
-    fun decodeAny(text: String): Decoded {
-        val trimmed = text.trim()
-        val fromLink = trimmed.lineSequence()
-            .map { it.trim() }
-            .firstOrNull { it.startsWith("https://$LINK_HOST/") }
-            ?.let(::fromLink)
-        return decode(fromLink ?: trimmed)
-    }
-
     sealed interface Decoded {
         data class Food(val product: Product) : Decoded
 
@@ -109,6 +40,101 @@ object QrPayload {
         ) : Decoded
 
         data class NotOurs(val reason: String) : Decoded
+    }
+
+    /**
+     * The whole item as a short code, for sending through a messenger.
+     *
+     * A QR code only works when both people are in the same room: a square
+     * sent through a chat arrives on the reader's own screen, and a phone
+     * cannot scan itself.
+     *
+     * An https link was tried first and does not work either. Messenger opens
+     * links in its own in-app browser, which never consults Android's intent
+     * resolution, so the link went to a real site nobody here owns and showed
+     * a connection error. Any app that swallows links this way defeats the
+     * scheme, and using a stranger's domain to carry private data was wrong
+     * regardless of whether it worked.
+     *
+     * So the payload travels as text the receiver pastes, and as a
+     * `healthy://` link for the apps that do hand unknown schemes to the
+     * system. Neither touches the network, and neither names a domain that is
+     * not ours.
+     *
+     * Deflated before base64 because JSON of this shape compresses to roughly
+     * a third, and that decides whether a dozen ingredients fit in something a
+     * person is willing to paste.
+     */
+    const val SCHEME = "healthy"
+    private const val LINK_PREFIX = "$SCHEME://i#"
+
+    /** The bare code, which is what a person copies out of a chat. */
+    fun toCode(payload: String): String {
+        val deflater = java.util.zip.Deflater(java.util.zip.Deflater.BEST_COMPRESSION)
+        val bytes = payload.toByteArray(Charsets.UTF_8)
+        deflater.setInput(bytes)
+        deflater.finish()
+        val out = java.io.ByteArrayOutputStream(bytes.size)
+        val buffer = ByteArray(4096)
+        while (!deflater.finished()) out.write(buffer, 0, deflater.deflate(buffer))
+        deflater.end()
+        // java.util.Base64, not android.util: available from API 26, which is
+        // minSdk, and it keeps this whole class testable on a plain JVM.
+        return java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(out.toByteArray())
+    }
+
+    fun toLink(payload: String): String = LINK_PREFIX + toCode(payload)
+
+    /** The payload back out of a code, or null if it is not one of ours. */
+    fun fromCode(code: String): String? {
+        val cleaned = code.trim().trimEnd('.', ',')
+        if (cleaned.isEmpty()) return null
+        return runCatching {
+            val raw = java.util.Base64.getUrlDecoder().decode(cleaned)
+            val inflater = java.util.zip.Inflater()
+            inflater.setInput(raw)
+            val out = java.io.ByteArrayOutputStream(raw.size * 4)
+            val buffer = ByteArray(4096)
+            while (!inflater.finished()) {
+                val n = inflater.inflate(buffer)
+                if (n == 0 && inflater.needsInput()) break
+                out.write(buffer, 0, n)
+            }
+            inflater.end()
+            out.toString(Charsets.UTF_8.name())
+        }.getOrNull()?.takeIf { it.startsWith("{") }
+    }
+
+    fun fromLink(link: String): String? {
+        val trimmed = link.trim()
+        if (!trimmed.startsWith(LINK_PREFIX)) return null
+        return fromCode(trimmed.removePrefix(LINK_PREFIX))
+    }
+
+    /**
+     * Accepts whatever the user actually has: a scanned square, a tapped
+     * link, or a whole chat message pasted in with the code somewhere inside
+     * it. They should not have to know which is which, or trim it by hand.
+     */
+    fun decodeAny(text: String): Decoded {
+        val trimmed = text.trim()
+        if (trimmed.startsWith("{")) return decode(trimmed)
+
+        val words = trimmed.split(Regex("\\s+")).map { it.trim() }
+        val fromLink = words.firstOrNull { it.startsWith(LINK_PREFIX) }?.let(::fromLink)
+        if (fromLink != null) return decode(fromLink)
+
+        // A bare code, or a message with one in it. Longest word first, since
+        // the code is far longer than anything a person types around it.
+        val candidate = words.sortedByDescending { it.length }
+            .asSequence()
+            .mapNotNull(::fromCode)
+            .firstOrNull()
+        return if (candidate != null) {
+            decode(candidate)
+        } else {
+            Decoded.NotOurs("No Healthy item found in that. Copy the whole message and try again.")
+        }
     }
 
     fun encode(product: Product): String =

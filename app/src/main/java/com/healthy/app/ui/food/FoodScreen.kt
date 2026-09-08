@@ -152,6 +152,9 @@ fun FoodScreen(
                 // Spec 5.4: a QR code carries one food or one recipe between
                 // phones with no server and no account.
                 com.healthy.app.scan.QrReceiveButton(onDecoded = vm::receiveShared)
+                // The route that survives Messenger, which opens links in its
+                // own browser and never offers them to the app.
+                com.healthy.app.scan.PasteReceiveButton(onDecoded = vm::receiveShared)
             }
         }
 

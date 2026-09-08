@@ -76,23 +76,27 @@
             </intent-filter>
 
             <!--
-              A shared recipe or food arriving as a link from a messenger.
+              A shared recipe or food arriving as a link.
 
-              The whole item is in the fragment after the #, which a browser
-              never sends to a server; nothing is fetched from healthy.app and
-              the host does not have to exist. This is on the launcher activity
-              only. Declaring the same filter twice is what once sent Health
-              Connect to the system chooser instead of our screen.
+              Our own scheme, not https. An https link was tried and failed in
+              the place it mattered: Messenger opens links in its own in-app
+              browser, which never consults Android's intent resolution, so the
+              link reached a real site nobody here owns and showed a connection
+              error. A private scheme cannot be swallowed that way and names no
+              domain we do not control.
 
-              Not autoVerify: without a published assetlinks file Android would
-              hand the link to a browser, and an unverified filter at least
-              offers Healthy in the chooser.
+              Apps that will not make such a link tappable are covered by the
+              paste route instead, which needs no link at all.
+
+              On the launcher activity only. Declaring the same filter twice is
+              what once sent Health Connect to the system chooser instead of
+              our rationale screen.
             -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="https" android:host="healthy.app" android:pathPrefix="/i" />
+                <data android:scheme="healthy" android:host="i" />
             </intent-filter>
         </activity>
 
