@@ -6,6 +6,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -298,22 +299,7 @@ fun DataScreen(
             }
         }
 
-        item {
-            SectionCard {
-                Text(
-                    "Still to come",
-                    color = HealthyColors.Paper,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                Text(
-                    "QR share arrives with the barcode scanner in step 8. Everything else in the data section is here.",
-                    color = HealthyColors.Muted,
-                    fontSize = 12.sp,
-                    modifier = Modifier.padding(top = 4.dp),
-                )
-            }
-        }
+        item { AboutCard() }
     }
 }
 
@@ -329,6 +315,50 @@ private fun CountRow(label: String, value: Int) {
             color = if (value == 0) HealthyColors.Muted else HealthyColors.Paper,
             fontSize = 13.sp,
             fontWeight = FontWeight.Medium,
+        )
+    }
+}
+
+/**
+ * Which build this is.
+ *
+ * Nothing showed it anywhere, so "it does this on my phone" could not be tied
+ * to a version — and with the app updating through Obtainium, two people can
+ * easily be looking at different builds while describing the same screen.
+ *
+ * The build type is here as well as the number, because a debug build and a
+ * release build of the same version are signed by different keys and cannot
+ * replace each other. That has already caused confusion once.
+ */
+@Composable
+private fun AboutCard() {
+    SectionCard {
+        Text(
+            "About",
+            color = HealthyColors.Paper,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.SemiBold,
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text("Version", color = HealthyColors.Muted, fontSize = 13.sp)
+            Text(
+                com.healthy.app.BuildConfig.VERSION_NAME +
+                    " (${com.healthy.app.BuildConfig.VERSION_CODE})" +
+                    if (com.healthy.app.BuildConfig.DEBUG) " debug" else "",
+                color = HealthyColors.Paper,
+                fontSize = 13.sp,
+            )
+        }
+        Text(
+            "Quote this when you report something. Offline, no account, no " +
+                "advertising, no analytics — the only request this app ever makes is " +
+                "one Open Food Facts lookup after a barcode it has not seen before.",
+            color = HealthyColors.Muted,
+            fontSize = 11.sp,
+            modifier = Modifier.padding(top = 8.dp),
         )
     }
 }

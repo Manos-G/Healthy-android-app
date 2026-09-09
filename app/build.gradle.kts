@@ -42,6 +42,10 @@ android {
 
     buildFeatures {
         compose = true
+        // For the version on the Data tab. Someone reporting a problem has to
+        // be able to say which build they saw it in without digging through
+        // Android's app settings.
+        buildConfig = true
     }
 
     signingConfigs {
