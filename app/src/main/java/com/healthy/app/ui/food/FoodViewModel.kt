@@ -26,6 +26,11 @@ data class LoggedItem(
     val entry: MealEntry,
     val product: Product?,
     val totals: Nutrition.Totals,
+    /**
+     * What to show. A portion of a recipe has no product, and reading the name
+     * off the product alone is what put "Unknown" against every dish logged.
+     */
+    val name: String = product?.name ?: "Unknown",
 )
 
 data class FoodState(
@@ -96,13 +101,21 @@ class FoodViewModel(app: Application) : AndroidViewModel(app) {
             val byBarcode = entries.mapNotNull { it.barcode }.distinct()
                 .mapNotNull { code -> products.byBarcode(code)?.let { code to it } }
                 .toMap()
+            // A logged portion of a dish resolves through the recipe, not a
+            // barcode, and nothing here used to know that.
+            val dishes = com.healthy.app.analysis.Dishes
+                .per100g(db, products.allForExport().associateBy { it.barcode })
+            val dishNames = com.healthy.app.analysis.Dishes.names(db)
 
             val items = entries.map { entry ->
                 val product = entry.barcode?.let(byBarcode::get)
                 LoggedItem(
                     entry = entry,
                     product = product,
-                    totals = product?.let { Nutrition.forGrams(it, entry.grams) } ?: Nutrition.Totals(),
+                    totals = Nutrition.forEntry(entry, byBarcode, dishes),
+                    name = product?.name
+                        ?: entry.recipeId?.let(dishNames::get)
+                        ?: "Unknown",
                 )
             }
             val day = w.dayForTotals(now)
@@ -131,9 +144,10 @@ class FoodViewModel(app: Application) : AndroidViewModel(app) {
         val from = HealthyDay.startOf(HealthyDay.plusDays(HealthyDay.today(), -7))
         val entries = meals.between(from, System.currentTimeMillis())
         val byBarcode = products.allForExport().associateBy { it.barcode }
+        val dishes = com.healthy.app.analysis.Dishes.per100g(db, byBarcode)
         return entries.groupBy { HealthyDay.dayOf(it.timestamp) }
             .toSortedMap()
-            .map { (_, dayEntries) -> Nutrition.totalFor(dayEntries, byBarcode) }
+            .map { (_, dayEntries) -> Nutrition.totalFor(dayEntries, byBarcode, dishes) }
     }
 
     fun setQuery(value: String) {

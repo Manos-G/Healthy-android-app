@@ -130,7 +130,10 @@ class EnergyViewModel(app: Application) : AndroidViewModel(app) {
         }
 
         val products = db.productDao().allForExport().associateBy { it.barcode }
-        val todayKcal = Nutrition.totalFor(mealsToday, products).kcal.toInt()
+        // Portions of a recipe carry a recipeId and no barcode. Without this
+        // the day's energy silently ignored every home-cooked meal.
+        val dishes = com.healthy.app.analysis.Dishes.per100g(db, products)
+        val todayKcal = Nutrition.totalFor(mealsToday, products, dishes).kcal.toInt()
         // Computed once. It was being queried twice per emission, for the
         // count and again for the comparison.
         val logged = completeDays().size
@@ -284,7 +287,8 @@ class EnergyViewModel(app: Application) : AndroidViewModel(app) {
         val from = HealthyDay.startOf(HealthyDay.plusDays(HealthyDay.today(), -(Energy.WINDOW_DAYS + 7L)))
         val meals = db.mealDao().between(from, System.currentTimeMillis())
         val products = db.productDao().allForExport().associateBy { it.barcode }
-        return IntakeHistory.completeDays(IntakeHistory.byDay(meals, products))
+        val dishes = com.healthy.app.analysis.Dishes.per100g(db, products)
+        return IntakeHistory.completeDays(IntakeHistory.byDay(meals, products, dishes))
             .takeLast(Energy.WINDOW_DAYS)
     }
 

@@ -24,13 +24,14 @@ object IntakeHistory {
     fun byDay(
         meals: List<MealEntry>,
         products: Map<String, Product>,
+        dishesPer100g: Map<Long, Nutrition.Totals> = emptyMap(),
         zone: ZoneId = ZoneId.systemDefault(),
     ): List<Day> =
         meals.groupBy { HealthyDay.dayOf(it.timestamp, zone) }
             .map { (date, entries) ->
                 Day(
                     date = date,
-                    kcal = Nutrition.totalFor(entries, products).kcal.toInt(),
+                    kcal = Nutrition.totalFor(entries, products, dishesPer100g).kcal.toInt(),
                     itemCount = entries.size,
                 )
             }

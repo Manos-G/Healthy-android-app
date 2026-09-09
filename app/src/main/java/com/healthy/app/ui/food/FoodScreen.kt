@@ -197,7 +197,7 @@ fun FoodScreen(
                             )
                             Column(Modifier.weight(1f)) {
                                 Text(
-                                    item.product?.name ?: "Unknown",
+                                    item.name,
                                     color = HealthyColors.Paper,
                                     fontSize = 13.sp,
                                 )

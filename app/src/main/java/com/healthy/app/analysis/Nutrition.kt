@@ -52,6 +52,12 @@ object Nutrition {
             fibre + other.fibre,
             salt + other.salt, magnesium + other.magnesium, vitaminD + other.vitaminD,
         )
+
+        operator fun times(factor: Double) = Totals(
+            kcal * factor, protein * factor, carbs * factor,
+            sugar * factor, fat * factor, saturatedFat * factor, fibre * factor,
+            salt * factor, magnesium * factor, vitaminD * factor,
+        )
     }
 
     /**
@@ -80,10 +86,35 @@ object Nutrition {
         )
     }
 
-    fun totalFor(entries: List<MealEntry>, products: Map<String, Product>): Totals =
+    /**
+     * What one logged entry contributed.
+     *
+     * An entry points at a product or at a recipe, and the second case was
+     * missed everywhere: a portion of a dish has a `recipeId` and no barcode,
+     * so it showed as "Unknown" at 0 kcal on the food list and counted as
+     * nothing towards the day's energy — while the recipe screen had just
+     * said, correctly, that it was 264 kcal.
+     *
+     * [dishesPer100g] holds each recipe's finished values for 100 g, which is
+     * what makes a portion of it scalable to whatever weight was logged.
+     */
+    fun forEntry(
+        entry: MealEntry,
+        products: Map<String, Product>,
+        dishesPer100g: Map<Long, Totals> = emptyMap(),
+    ): Totals {
+        entry.barcode?.let(products::get)?.let { return forGrams(it, entry.grams) }
+        entry.recipeId?.let(dishesPer100g::get)?.let { return it * (entry.grams / 100.0) }
+        return Totals()
+    }
+
+    fun totalFor(
+        entries: List<MealEntry>,
+        products: Map<String, Product>,
+        dishesPer100g: Map<Long, Totals> = emptyMap(),
+    ): Totals =
         entries.fold(Totals()) { running, entry ->
-            val product = entry.barcode?.let(products::get) ?: return@fold running
-            running + forGrams(product, entry.grams)
+            running + forEntry(entry, products, dishesPer100g)
         }
 
     /** A barcode the user typed in themselves rather than scanned (spec 12.4). */

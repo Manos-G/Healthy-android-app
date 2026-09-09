@@ -92,4 +92,57 @@ class NutritionTest {
         val b = Nutrition.manualBarcode("Apple")
         assertTrue("codes must differ: $a and $b", a != b)
     }
+
+    /**
+     * Reported from the phone: logging 222 g of a saved recipe showed
+     * "Unknown, 0 kcal" on the food list and added nothing to the day, while
+     * the recipe screen had just said 264 kcal.
+     *
+     * A meal entry points at a product or at a recipe. Everything that added
+     * entries up only knew the first kind.
+     */
+    @Test
+    fun `a portion logged from a recipe counts, and is not Unknown`() {
+        val dish = 3L
+        // 119 kcal per 100 g of finished dish, as the recipe card showed.
+        val per100g = mapOf(dish to Nutrition.Totals(kcal = 119.0, protein = 6.0))
+        val entry = MealEntry(
+            timestamp = 0L,
+            mealType = MealEntry.DINNER,
+            recipeId = dish,
+            grams = 222.0,
+        )
+
+        val totals = Nutrition.forEntry(entry, emptyMap(), per100g)
+        assertEquals(264.2, totals.kcal, 0.5)
+        assertEquals(13.3, totals.protein, 0.1)
+    }
+
+    /** A recipe the app cannot resolve stays at zero rather than inventing one. */
+    @Test
+    fun `an unresolvable recipe contributes nothing`() {
+        val entry = MealEntry(timestamp = 0L, mealType = MealEntry.DINNER, recipeId = 9L, grams = 200.0)
+        assertEquals(0.0, Nutrition.forEntry(entry, emptyMap(), emptyMap()).kcal, 0.001)
+    }
+
+    /** A day of both kinds adds up to both. */
+    @Test
+    fun `a day mixing scanned food and a home-cooked dish totals both`() {
+        val crisps = Product(
+            barcode = "1",
+            kind = Product.KIND_FOOD,
+            name = "Crisps",
+            kcal100 = 517.0,
+        )
+        val entries = listOf(
+            MealEntry(timestamp = 0L, mealType = MealEntry.SNACK, barcode = "1", grams = 53.0),
+            MealEntry(timestamp = 1L, mealType = MealEntry.DINNER, recipeId = 3L, grams = 222.0),
+        )
+        val totals = Nutrition.totalFor(
+            entries,
+            mapOf("1" to crisps),
+            mapOf(3L to Nutrition.Totals(kcal = 119.0)),
+        )
+        assertEquals(274.0 + 264.0, totals.kcal, 1.0)
+    }
 }
