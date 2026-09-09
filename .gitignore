@@ -15,3 +15,6 @@
 /keystore.properties
 *.jks
 *.keystore
+
+# The chat webhook is a password: anyone holding it can post to the group.
+/scripts/announce.conf
