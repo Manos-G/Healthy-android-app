@@ -44,7 +44,7 @@ private val Scheme = darkColorScheme(
 /**
  * The app is dark only, like the prototype. A light scheme is not offered
  * because the screen the user opens most often is the morning one, and a white
- * field at 04:00 is hostile.
+ * field in the small hours is hostile.
  */
 @Composable
 fun HealthyTheme(

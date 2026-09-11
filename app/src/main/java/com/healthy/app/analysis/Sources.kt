@@ -187,7 +187,9 @@ object Sources {
             "sleep stages. This method finds the rhythm of the night from a real " +
             "measurement. It does not name the stages."
 
-    const val DAY_BOUNDARY_NOTE: String =
-        "A day here runs 04:00 to 04:00, not midnight to midnight, so a night " +
-            "that starts after midnight stays with the day it belongs to."
+    /** Not a const: the boundary is read from the one place that defines it. */
+    val DAY_BOUNDARY_NOTE: String =
+        "A day here runs ${com.healthy.app.core.HealthyDay.BOUNDARY_LABEL} to " +
+            "${com.healthy.app.core.HealthyDay.BOUNDARY_LABEL}, not midnight to midnight, " +
+            "so a night that starts after midnight stays with the day it belongs to."
 }

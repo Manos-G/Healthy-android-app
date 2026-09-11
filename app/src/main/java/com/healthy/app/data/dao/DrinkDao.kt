@@ -11,7 +11,7 @@ import kotlinx.coroutines.flow.Flow
 
 /**
  * Queries are bounded by explicit epoch millis rather than by a date string,
- * because the logical day runs 04:00 to 04:00 (spec 4.4). The caller gets the
+ * because the logical day runs boundary to boundary (spec 4.4). The caller gets
  * bounds from [com.healthy.app.core.HealthyDay].
  */
 @Dao
@@ -41,7 +41,7 @@ interface DrinkDao {
 
     /**
      * Every dose still decaying at [from]. The caffeine curve needs the doses
-     * from before the window opened, or the level at 04:00 starts at zero when
+     * from before the window opened, or the level at the boundary starts at zero when
      * it should not (spec 6).
      */
     @Query("SELECT * FROM drink WHERE timestamp >= :since AND timestamp <= :until ORDER BY timestamp ASC")

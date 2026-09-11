@@ -188,7 +188,7 @@ fun FoodScreen(
                         "Everything eaten in the last 24 hours. Step back to see or " +
                             "correct an earlier day."
                     } else {
-                        "One whole day, 04:00 to 04:00."
+                        "One whole day, ${com.healthy.app.core.HealthyDay.BOUNDARY_LABEL} to ${com.healthy.app.core.HealthyDay.BOUNDARY_LABEL}."
                     },
                     color = HealthyColors.Muted,
                     fontSize = 11.sp,

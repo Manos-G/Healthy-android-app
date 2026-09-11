@@ -60,7 +60,7 @@ class EnergyViewModel(app: Application) : AndroidViewModel(app) {
      * The logical day, re-checked on a slow tick.
      *
      * `distinctUntilChanged` means the queries downstream restart only when
-     * the day actually rolls at 04:00, so the cost of the tick is a string
+     * the day actually rolls over, so the cost of the tick is a string
      * comparison a minute and nothing else.
      */
     private val day: kotlinx.coroutines.flow.Flow<String> = kotlinx.coroutines.flow.flow {

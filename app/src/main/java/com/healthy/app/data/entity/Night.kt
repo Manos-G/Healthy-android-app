@@ -8,7 +8,7 @@ import androidx.room.PrimaryKey
  * One row for each night (spec 4.1).
  *
  * The primary key is the date the sleep *started*, as `YYYY-MM-DD`. A session
- * that runs 02:38 to 13:49 belongs to the day that began at 04:00 the previous
+ * that runs 02:38 to 13:49 belongs to the day that began at the boundary before
  * afternoon, so the key comes from [com.healthy.app.core.HealthyDay.dayOf] and
  * never from the raw calendar date of the start instant.
  *

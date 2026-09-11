@@ -101,8 +101,8 @@ class TrendsViewModel(app: Application) : AndroidViewModel(app) {
         }.getOrElse { LocalTime.of(23, 30) }
         val zone = ZoneId.systemDefault()
         val base = LocalDate.parse(date)
-        // A bedtime before 04:00 belongs to the next calendar day, since the
-        // logical day runs 04:00 to 04:00.
+        // A bedtime before the boundary belongs to the next calendar day,
+        // since the logical day runs boundary to boundary.
         val day = if (time.hour < HealthyDay.BOUNDARY_HOUR) base.plusDays(1) else base
         return ZonedDateTime.of(day, time, zone).toInstant().toEpochMilli()
     }

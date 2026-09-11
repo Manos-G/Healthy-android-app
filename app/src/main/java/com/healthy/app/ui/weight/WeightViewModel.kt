@@ -36,6 +36,13 @@ data class WeightState(
     val goalTargetKg: Double? = null,
     /** Where the current rate leads, week by week, from today's trend. */
     val projection: List<Double> = emptyList(),
+    /**
+     * Where the chosen rate said the weight would be, by date.
+     *
+     * Keyed by date rather than parallel to the points, because the chart
+     * shows only a window of them and a list would have to be sliced in step.
+     */
+    val plannedKg: Map<String, Double> = emptyMap(),
     val dailyTargetKcal: Int? = null,
     /** Newest first, for the history list. */
     val history: List<Weight> = emptyList(),
@@ -98,6 +105,7 @@ class WeightViewModel(app: Application) : AndroidViewModel(app) {
             maxRateKgPerWeek = weights.lastOrNull()?.let { WeightGoal.maximumRate(it.weightKg) },
             rateRefusal = refusal,
             goalTargetKg = settings.goalTargetKg,
+            plannedKg = plannedFor(points, settings),
             history = weights.asReversed(),
             goalProgressPercent = percent,
             celebrate = percent
@@ -112,6 +120,40 @@ class WeightViewModel(app: Application) : AndroidViewModel(app) {
             },
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), WeightState())
+
+    /**
+     * The plan, laid over what actually happened.
+     *
+     * Starts at the trend on the day the goal began and moves at the chosen
+     * rate, so the distance between this line and the real one is how far
+     * ahead or behind the plan is running. It stops at the goal weight: past
+     * that the plan is finished and a line continuing beyond it would be
+     * asking for something nobody agreed to.
+     */
+    private fun plannedFor(
+        points: List<WeightTrend.Point>,
+        settings: HealthySettings,
+    ): Map<String, Double> {
+        if (settings.goalMode != HealthySettings.GOAL_CHANGE) return emptyMap()
+        val rate = settings.goalRateKgPerWeek?.takeIf { it != 0.0 } ?: return emptyMap()
+        val began = settings.goalStartedOn ?: points.firstOrNull()?.date ?: return emptyMap()
+        val from = points.filter { it.date >= began }
+        if (from.isEmpty()) return emptyMap()
+
+        val start = settings.goalStartKg ?: from.first().trendKg
+        val target = settings.goalTargetKg
+        val firstDay = java.time.LocalDate.parse(from.first().date).toEpochDay()
+
+        return from.associate { point ->
+            val days = java.time.LocalDate.parse(point.date).toEpochDay() - firstDay
+            val planned = start + rate * days / 7.0
+            point.date to when {
+                target == null -> planned
+                rate < 0 -> planned.coerceAtLeast(target)
+                else -> planned.coerceAtMost(target)
+            }
+        }
+    }
 
     /**
      * Where the chosen rate leads, from today's trend to the goal weight.

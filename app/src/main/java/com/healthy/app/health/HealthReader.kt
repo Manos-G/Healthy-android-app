@@ -74,7 +74,7 @@ class HealthReader(private val context: Context) {
      * The search window is deliberately wide: a night filed under a date can
      * start at 02:38 the following calendar morning and end at 13:49, so
      * querying the calendar day would miss it entirely. The window runs from
-     * the logical day's 04:00 start to 04:00 two days later, and the session
+     * the logical day's start to two days later, and the session
      * kept is the one whose *start* falls in the logical day (spec 4.4).
      */
     suspend fun readNight(date: String, zone: ZoneId = ZoneId.systemDefault()): Result {

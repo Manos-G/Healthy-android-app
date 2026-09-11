@@ -93,6 +93,22 @@ class WeightGoalTest {
         assertEquals(79.8, progress.targetLine[2], 0.0001)
     }
 
+    /**
+     * A week without weighing still passes. The plan is a rate per week, so it
+     * has to advance with the calendar rather than with the number of readings.
+     */
+    @Test
+    fun `the target line follows dates, not the count of readings`() {
+        val points = listOf(
+            WeightTrend.Point(date = "2026-03-01", weightKg = 80.0, trendKg = 80.0),
+            WeightTrend.Point(date = "2026-03-08", weightKg = 79.0, trendKg = 79.0),
+        )
+        val progress = WeightGoal.progress(points, rateKgPerWeek = -0.7)!!
+        assertEquals(80.0, progress.targetLine[0], 0.0001)
+        // Seven days on, not one reading on.
+        assertEquals(79.3, progress.targetLine[1], 0.0001)
+    }
+
     @Test
     fun `the achieved rate is measured from the trend across the window`() {
         // 15 days, trend falling 0.1 a day; the last 14 give 13 days of change.

@@ -11,8 +11,8 @@ import java.time.format.DateTimeFormatter
  * Two different questions need two different answers, and the app had only
  * one. "What have I drunk lately" is a rolling question: at 04:20 a coffee
  * from 03:00 is still very much part of the answer, but the logical day rolled
- * over at 04:00 and took it off the screen. "How much did I have on Tuesday"
- * is a whole-day question, and it has to use the 04:00 boundary or a late
+ * over at the boundary and took it off the screen. "How much did I have on
+ * Tuesday" is a whole-day question, and it has to use that boundary or a late
  * night lands on the wrong date.
  *
  * So [Rolling] answers the first and [Day] answers the second, and the list
@@ -28,7 +28,7 @@ sealed interface LogWindow {
     /** The last 24 hours from now, ignoring the boundary entirely. */
     data object Rolling : LogWindow
 
-    /** One logical day, 04:00 to 04:00, named by the date it started. */
+    /** One logical day, boundary to boundary, named by the date it started. */
     data class Day(val date: String) : LogWindow
 
     fun startMillis(now: Long, zone: ZoneId = ZoneId.systemDefault()): Long = when (this) {
@@ -84,7 +84,7 @@ sealed interface LogWindow {
                 is Day -> {
                     val today = HealthyDay.dayOf(now, zone)
                     when (window.date) {
-                        today -> "Today, since 04:00"
+                        today -> "Today, since ${HealthyDay.BOUNDARY_LABEL}"
                         HealthyDay.plusDays(today, -1) -> "Yesterday"
                         // A screen can compose before its first emission, so
                         // this is reachable with a date that was never set.
@@ -98,7 +98,7 @@ sealed interface LogWindow {
         /** True while the window has nothing newer to step to. */
         fun isNewest(window: LogWindow): Boolean = window is Rolling
 
-        /** Where the 04:00 boundary falls inside a rolling window, if it does. */
+        /** Where the day boundary falls inside a rolling window, if it does. */
         fun boundaryWithin(window: LogWindow, now: Long, zone: ZoneId = ZoneId.systemDefault()): Long? {
             if (window !is Rolling) return null
             val start = HealthyDay.startOf(HealthyDay.dayOf(now, zone), zone)

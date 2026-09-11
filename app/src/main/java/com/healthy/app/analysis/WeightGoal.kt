@@ -123,7 +123,15 @@ object WeightGoal {
     fun progress(points: List<WeightTrend.Point>, rateKgPerWeek: Double): Progress? {
         if (points.isEmpty()) return null
         val start = points.first().trendKg
-        val targetLine = points.indices.map { day -> start + rateKgPerWeek * day / 7.0 }
+        // By date, not by position in the list. Indexing by position assumed a
+        // reading every day, so a gap in weighing made the plan advance more
+        // slowly than the calendar did — the same mistake the chart made when
+        // it spaced points evenly.
+        val firstDay = java.time.LocalDate.parse(points.first().date).toEpochDay()
+        val targetLine = points.map { point ->
+            val days = java.time.LocalDate.parse(point.date).toEpochDay() - firstDay
+            start + rateKgPerWeek * days / 7.0
+        }
 
         val window = points.takeLast(ACTUAL_RATE_DAYS)
         val actual = if (window.size < 2) {

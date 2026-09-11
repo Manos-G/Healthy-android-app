@@ -43,7 +43,7 @@ data class FluidsState(
     /** The rows the list is showing, which is [window], not necessarily today. */
     val entries: List<Drink> = emptyList(),
     val window: LogWindow = LogWindow.Rolling,
-    /** Where the 04:00 boundary falls in the list, so it can be marked. */
+    /** Where the day boundary falls in the list, so it can be marked. */
     val boundaryMillis: Long? = null,
     /** Every dose still decaying into the window, needed to draw the curve. */
     val allDoses: List<Drink> = emptyList(),

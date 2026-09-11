@@ -33,7 +33,7 @@ import java.time.format.DateTimeFormatter
  * Connect styling arrive in step 5; until then every field is typed.
  *
  * Times are held as `HH:mm` strings rather than instants because that is what
- * the user enters. They become epoch millis only on save, where the 04:00
+ * the user enters. They become epoch millis only on save, where the day
  * boundary decides which night they belong to.
  */
 data class MorningForm(
@@ -482,8 +482,8 @@ class MorningViewModel(app: Application) : AndroidViewModel(app) {
     /**
      * Turns `HH:mm` into an instant on the logical day [date].
      *
-     * A time before 04:00 belongs to the next calendar day, because the logical
-     * day runs 04:00 to 04:00. This is what lets a night start at 02:38 and
+     * A time before the boundary belongs to the next calendar day, because the
+     * logical day runs boundary to boundary. This lets a night start at 02:38 and
      * still record against the day it started (spec 4.4, acceptance test 5).
      */
     private fun String.toEpochOn(date: String, after: Long? = null): Long? {

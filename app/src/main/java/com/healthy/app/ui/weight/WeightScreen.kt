@@ -564,7 +564,11 @@ private fun TrendCard(state: WeightState) {
             val projectedDays = (state.projection.size - 1).coerceAtLeast(0)
             val spanDays = ((lastDay - firstDay) + projectedDays).coerceAtLeast(1L).toFloat()
 
-            val readings = shown.flatMap { listOf(it.weightKg, it.trendKg) } + state.projection
+            val plannedPoints = remember(shown, state.plannedKg) {
+                shown.mapNotNull { p -> state.plannedKg[p.date]?.let { p.date to it } }
+            }
+            val readings = shown.flatMap { listOf(it.weightKg, it.trendKg) } +
+                state.projection + plannedPoints.map { it.second }
             val lo = readings.min() - 0.2
             val hi = readings.max() + 0.2
 
@@ -607,6 +611,27 @@ private fun TrendCard(state: WeightState) {
                         color = HealthyColors.Muted.copy(alpha = 0.55f),
                         radius = 2.5f,
                         center = Offset(x(LocalDate.parse(p.date).toEpochDay() - firstDay), y(p.weightKg)),
+                    )
+                }
+
+                // The plan, under the trend so the trend stays the thing read
+                // first. The gap between them is how far ahead or behind the
+                // chosen rate is running.
+                if (plannedPoints.size >= 2) {
+                    val planPath = Path()
+                    plannedPoints.forEachIndexed { i, (date, value) ->
+                        val px = x(LocalDate.parse(date).toEpochDay() - firstDay)
+                        val py = y(value)
+                        if (i == 0) planPath.moveTo(px, py) else planPath.lineTo(px, py)
+                    }
+                    drawPath(
+                        planPath,
+                        color = HealthyColors.Paper.copy(alpha = 0.35f),
+                        style = Stroke(
+                            width = 2f,
+                            pathEffect = androidx.compose.ui.graphics.PathEffect
+                                .dashPathEffect(floatArrayOf(2f, 4f)),
+                        ),
                     )
                 }
 
@@ -664,6 +689,32 @@ private fun TrendCard(state: WeightState) {
                         HealthyColors.Muted
                     },
                     fontSize = 10.sp,
+                )
+            }
+
+            if (plannedPoints.size >= 2) {
+                val planned = plannedPoints.last().second
+                val actual = shown.last().trendKg
+                val ahead = if (state.rateKgPerWeek?.let { it < 0 } == true) {
+                    planned - actual
+                } else {
+                    actual - planned
+                }
+                Text(
+                    buildString {
+                        append("Faint line is the plan at ")
+                        append("${"%+.2f".format(state.rateKgPerWeek ?: 0.0)} kg a week. ")
+                        append(
+                            when {
+                                kotlin.math.abs(ahead) < 0.1 -> "You are on it."
+                                ahead > 0 -> "You are ${"%.1f".format(ahead)} kg ahead of it."
+                                else -> "You are ${"%.1f".format(-ahead)} kg behind it."
+                            }
+                        )
+                    },
+                    color = HealthyColors.Muted,
+                    fontSize = 11.sp,
+                    modifier = Modifier.padding(top = 4.dp),
                 )
             }
 

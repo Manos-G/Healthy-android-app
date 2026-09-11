@@ -33,7 +33,7 @@ import java.time.format.DateTimeFormatter
  *
  * Offsets rather than a clock, because a person remembers "about two hours
  * ago" and does not remember 14:37. The resulting time is shown so there is
- * no doubt, including when the choice crosses the 04:00 boundary and lands on
+ * no doubt, including when the choice crosses the day boundary and lands on
  * the previous logical day.
  */
 @OptIn(ExperimentalLayoutApi::class)
@@ -86,7 +86,7 @@ private val HHMM: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 private fun describe(at: Long, now: Long): String {
     val clock = Instant.ofEpochMilli(at).atZone(ZoneId.systemDefault()).toLocalTime().format(HHMM)
     if (at >= now - 30_000L) return "Logged at $clock, now."
-    // Which logical day it lands on, since the 04:00 boundary makes that a
+    // Which logical day it lands on, since the day boundary makes that a
     // real question for anything backdated in the small hours.
     val sameDay = HealthyDay.dayOf(at) == HealthyDay.dayOf(now)
     return if (sameDay) {

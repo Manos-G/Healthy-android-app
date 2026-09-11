@@ -612,7 +612,7 @@ private fun EntriesCard(
                 "Everything you have drunk in the last 24 hours, whichever day the " +
                     "app counts it against. Step back to correct an earlier day."
             } else {
-                "One whole day, 04:00 to 04:00."
+                "One whole day, ${com.healthy.app.core.HealthyDay.BOUNDARY_LABEL} to ${com.healthy.app.core.HealthyDay.BOUNDARY_LABEL}."
             } + " Tap one to change how much.",
             color = HealthyColors.Muted,
             fontSize = 11.sp,
@@ -641,7 +641,7 @@ private fun EntriesCard(
                 ) {
                     HorizontalDivider(color = HealthyColors.Rule, modifier = Modifier.weight(1f))
                     Text(
-                        "  04:00 — counts against the previous day  ",
+                        "  ${com.healthy.app.core.HealthyDay.BOUNDARY_LABEL} — counts against the previous day  ",
                         color = HealthyColors.Muted,
                         fontSize = 10.sp,
                     )

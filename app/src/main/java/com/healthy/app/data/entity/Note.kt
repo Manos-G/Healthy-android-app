@@ -20,7 +20,7 @@ data class Note(
     @PrimaryKey(autoGenerate = true)
     @ColumnInfo(name = "id") val id: Long = 0,
 
-    /** `YYYY-MM-DD`, on the 04:00 boundary. */
+    /** `YYYY-MM-DD`, on the logical day boundary. */
     @ColumnInfo(name = "date") val date: String,
     @ColumnInfo(name = "text") val text: String,
     @ColumnInfo(name = "createdAt") val createdAt: Long,
