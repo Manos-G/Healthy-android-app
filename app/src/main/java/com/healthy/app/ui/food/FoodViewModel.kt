@@ -75,17 +75,36 @@ class FoodViewModel(app: Application) : AndroidViewModel(app) {
 
     private val window = MutableStateFlow<LogWindow>(LogWindow.Rolling)
 
-    /** Re-read on each change so "the last 24 hours" moves with the clock. */
-    private val nowAtChange = MutableStateFlow(System.currentTimeMillis())
+    /**
+     * The clock, which has to keep moving.
+     *
+     * It was read once when the screen was built, so "the last 24 hours" ended
+     * at the moment the tab was opened: anything logged afterwards had a
+     * timestamp past the end of the window and was filtered straight back out.
+     * Food was logged, the list did not change, and nothing said why.
+     *
+     * It ticks so the window follows the clock, and is nudged after every
+     * write so the new row appears at once rather than up to a minute later.
+     */
+    private val now = MutableStateFlow(System.currentTimeMillis())
+
+    init {
+        viewModelScope.launch {
+            while (true) {
+                kotlinx.coroutines.delay(60_000)
+                now.value = System.currentTimeMillis()
+            }
+        }
+    }
 
     fun setWindow(value: LogWindow) {
-        nowAtChange.value = System.currentTimeMillis()
+        now.value = System.currentTimeMillis()
         window.value = value
     }
 
     val state: StateFlow<FoodState> =
         combine(
-            combine(window, nowAtChange) { w, now -> w to now }.flatMapLatest { (w, now) ->
+            combine(window, now) { w, now -> w to now }.flatMapLatest { (w, now) ->
                 val day = w.dayForTotals(now)
                 // Wide enough for both the list's window and the day the
                 // totals are measured over, which are not the same stretch.
@@ -168,7 +187,8 @@ class FoodViewModel(app: Application) : AndroidViewModel(app) {
      */
     fun log(product: Product, grams: Double, mealType: String, minutesAgo: Int = 0) {
         viewModelScope.launch {
-            val now = System.currentTimeMillis() - minutesAgo * 60_000L
+            val at = System.currentTimeMillis() - minutesAgo * 60_000L
+            val now = at
             meals.insert(
                 MealEntry(
                     timestamp = now,
@@ -188,6 +208,7 @@ class FoodViewModel(app: Application) : AndroidViewModel(app) {
                 fatG = totals.fat,
             )
             _pendingPortion.value = null
+            this@FoodViewModel.now.value = System.currentTimeMillis()
         }
     }
 
@@ -273,7 +294,10 @@ class FoodViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun delete(entry: MealEntry) {
-        viewModelScope.launch { meals.delete(entry) }
+        viewModelScope.launch {
+            meals.delete(entry)
+            now.value = System.currentTimeMillis()
+        }
     }
 }
 

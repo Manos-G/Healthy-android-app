@@ -299,6 +299,12 @@ class MorningViewModel(app: Application) : AndroidViewModel(app) {
                             append(" h ")
                             append(result.data.minutes % 60)
                             append(" m")
+                            // Two sleeps in a day used to record only one of
+                            // them, so when both are counted it should say so
+                            // rather than quietly show a larger number.
+                            if (result.data.sleepCount > 1) {
+                                append(" across ${result.data.sleepCount} sleeps")
+                            }
                             if (edited.isNotEmpty()) {
                                 append(". Kept your edits to ")
                                 append(edited.sorted().joinToString(", "))

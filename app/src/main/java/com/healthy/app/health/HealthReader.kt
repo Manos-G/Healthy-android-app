@@ -43,6 +43,12 @@ class HealthReader(private val context: Context) {
          */
         val source: String,
         val competingSessions: Int,
+        /**
+         * How many separate sleeps this day held. More than one means a nap
+         * as well as a night, and [minutes] is their sum rather than the span
+         * between the first and the last.
+         */
+        val sleepCount: Int = 1,
         /** Which app supplied the heart rate, which may differ from the sleep. */
         val heartRateSource: String? = null,
         /** Individual samples, which spec 18.3 requires over the 30-minute groups. */
@@ -84,30 +90,41 @@ class HealthReader(private val context: Context) {
             val forThisNight = sessions
                 .filter { HealthyDay.dayOf(it.startTime.toEpochMilli(), zone) == date }
 
-            // With two apps writing the same night, prefer the denser record:
-            // more stage blocks means more detail to work with. Duration only
-            // breaks a tie, so a long featureless session never beats a
-            // shorter one that actually describes the night.
-            val session = forThisNight
-                .maxWithOrNull(
-                    compareBy(
-                        { it.stages.size },
-                        { it.endTime.toEpochMilli() - it.startTime.toEpochMilli() },
+            // Two apps writing the same night produce overlapping records of
+            // one sleep, and only the denser one should count. A night and a
+            // nap produce records that do not overlap, and both are real —
+            // keeping only the longest recorded one sleep on a day with two.
+            val chosen = SleepAnalysis.distinctSleeps(
+                forThisNight.mapIndexed { index, record ->
+                    SleepAnalysis.Session(
+                        start = record.startTime.toEpochMilli(),
+                        end = record.endTime.toEpochMilli(),
+                        stageCount = record.stages.size,
+                        index = index,
                     )
-                )
-                ?: return@runCatching Result.NoSession
+                }
+            )
+            if (chosen.isEmpty()) return@runCatching Result.NoSession
+            val records = chosen.map { forThisNight[it.index] }
+            val session = records.maxByOrNull { it.stages.size } ?: records.first()
 
-            val start = session.startTime.toEpochMilli()
-            val end = session.endTime.toEpochMilli()
+            // The span, for the hypnogram's axis and the bedtime figure.
+            val start = chosen.minOf { it.start }
+            val end = chosen.maxOf { it.end }
+            // Time asleep is the sum, never the span: a nap at 15:00 after a
+            // night that ended at 09:00 must not count the hours between.
+            val minutes = SleepAnalysis.totalMinutes(chosen)
 
-            val blocks = session.stages.map { stage ->
-                StageBlock(
-                    nightDate = date,
-                    type = stage.stage.toStageName(),
-                    startTime = stage.startTime.toEpochMilli(),
-                    endTime = stage.endTime.toEpochMilli(),
-                )
-            }
+            val blocks = records.flatMap { record ->
+                record.stages.map { stage ->
+                    StageBlock(
+                        nightDate = date,
+                        type = stage.stage.toStageName(),
+                        startTime = stage.startTime.toEpochMilli(),
+                        endTime = stage.endTime.toEpochMilli(),
+                    )
+                }
+            }.sortedBy { it.startTime }
 
             // A record has to be read by a window wide enough to CONTAIN it,
             // not merely to overlap it: Health Connect's `between` matches
@@ -180,14 +197,15 @@ class HealthReader(private val context: Context) {
                 NightData(
                     sleepStart = start,
                     sleepEnd = end,
-                    minutes = ((end - start) / 60_000L).toInt(),
+                    minutes = minutes,
                     stageBlocks = blocks,
                     totals = SleepAnalysis.stageTotals(blocks),
                     restingHr = SleepAnalysis.restingHeartRate(bpmForResting),
                     spo2 = SleepAnalysis.meanSpo2(oxygen),
                     heartRateSampleCount = nightSamples.size,
                     source = session.metadata.dataOrigin.packageName,
-                    competingSessions = forThisNight.size - 1,
+                    competingSessions = forThisNight.size - chosen.size,
+                    sleepCount = chosen.size,
                     heartRateSamples = nightSamples,
                     heartRateSource = heartRecords
                         .groupBy { it.metadata.dataOrigin.packageName }
