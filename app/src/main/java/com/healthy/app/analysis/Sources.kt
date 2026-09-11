@@ -187,9 +187,13 @@ object Sources {
             "sleep stages. This method finds the rhythm of the night from a real " +
             "measurement. It does not name the stages."
 
-    /** Not a const: the boundary is read from the one place that defines it. */
+    /** Not a const: the boundaries are read from the one place that defines them. */
     val DAY_BOUNDARY_NOTE: String =
-        "A day here runs ${com.healthy.app.core.HealthyDay.BOUNDARY_LABEL} to " +
-            "${com.healthy.app.core.HealthyDay.BOUNDARY_LABEL}, not midnight to midnight, " +
-            "so a night that starts after midnight stays with the day it belongs to."
+        "There are two days here. Eating and drinking run " +
+            "${com.healthy.app.core.HealthyDay.BOUNDARY_LABEL} to " +
+            "${com.healthy.app.core.HealthyDay.BOUNDARY_LABEL}, so a coffee at 02:00 " +
+            "counts against the day still being lived rather than the one about to " +
+            "start. Sleep runs midnight to midnight, so a night carries the calendar " +
+            "date it began on. Where the two are compared, a night is matched to the " +
+            "eating day that was running when its sleep started."
 }

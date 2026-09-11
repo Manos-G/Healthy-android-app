@@ -194,8 +194,13 @@ class MorningViewModel(app: Application) : AndroidViewModel(app) {
         if (start > 0 && end > start) ((end - start) / 60_000L).toInt() else null
 
     private suspend fun load(night: Night?, date: String) {
-        val from = HealthyDay.startOf(date)
-        val to = HealthyDay.endOf(date)
+        // Drinks and meals are counted on the 04:00 day, and the one that
+        // matters for a night is the day being lived when sleep began — not
+        // the day sharing the night's name, which midnight numbering makes a
+        // different stretch of time.
+        val intakeDay = HealthyDay.intakeDayForNight(date, night?.sleepStart ?: 0L)
+        val from = HealthyDay.startOf(intakeDay)
+        val to = HealthyDay.endOf(intakeDay)
         val dayDrinks = drinks.between(from, to)
         // Spec 9.4: a beer or a wine already recorded its units, so the form
         // shows the total instead of asking for it again.
@@ -482,15 +487,15 @@ class MorningViewModel(app: Application) : AndroidViewModel(app) {
     /**
      * Turns `HH:mm` into an instant on the logical day [date].
      *
-     * A time before the boundary belongs to the next calendar day, because the
-     * logical day runs boundary to boundary. This lets a night start at 02:38 and
-     * still record against the day it started (spec 4.4, acceptance test 5).
+     * A night carries the calendar date its sleep began, so the times sit on
+     * that date. A wake time earlier than the sleep time means the night ran
+     * into the following day, which [after] handles.
      */
     private fun String.toEpochOn(date: String, after: Long? = null): Long? {
         val time = toLocalTimeOrNull() ?: return null
         val zone = ZoneId.systemDefault()
         val base = LocalDate.parse(date)
-        val day = if (time.hour < HealthyDay.BOUNDARY_HOUR) base.plusDays(1) else base
+        val day = if (time.hour < HealthyDay.SLEEP_BOUNDARY_HOUR) base.plusDays(1) else base
         var millis = ZonedDateTime.of(day, time, zone).toInstant().toEpochMilli()
         // A wake time that lands before the sleep time means the night ran on
         // into the following day.

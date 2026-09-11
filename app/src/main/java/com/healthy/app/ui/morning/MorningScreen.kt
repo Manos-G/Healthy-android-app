@@ -149,7 +149,10 @@ private fun DateCard(form: MorningForm, saved: Set<String>, vm: MorningViewModel
             }
         }
         Text(
-            "The date a night is filed under is the day the sleep started.",
+            "A night is filed under the calendar date its sleep started, so a night " +
+                "beginning at 02:38 is that day's. Food and drink still count on the " +
+                "${com.healthy.app.core.HealthyDay.BOUNDARY_LABEL} day, and this screen " +
+                "shows the one you were living when the night began.",
             color = HealthyColors.Muted,
             fontSize = 12.sp,
             modifier = Modifier.padding(top = 6.dp),

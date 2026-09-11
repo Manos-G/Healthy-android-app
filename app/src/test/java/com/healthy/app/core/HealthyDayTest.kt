@@ -56,13 +56,60 @@ class HealthyDayTest {
     }
 
     /**
-     * The morning screen opens on the night the user just finished, which is
-     * yesterday's logical day: sleep that starts before the boundary files
-     * under the previous day, so today's night has not happened yet.
+     * Nights carry the calendar date their sleep began, so the night just
+     * finished by someone who falls asleep after midnight began today.
      */
     @Test
-    fun `lastNight is one logical day before today`() {
-        val today = HealthyDay.today(athens)
-        assertEquals(HealthyDay.plusDays(today, -1), HealthyDay.lastNight(athens))
+    fun `lastNight is the calendar date, since a night is named by its start`() {
+        assertEquals(HealthyDay.sleepToday(athens), HealthyDay.lastNight(athens))
+    }
+
+    /**
+     * The two boundaries, which exist because eating and sleeping ask
+     * different questions of the same instant.
+     *
+     * A coffee at 02:38 belongs to the day still being lived. The sleep that
+     * begins in the same minute is the night of the new date.
+     */
+    @Test
+    fun `one instant is yesterday's intake and tonight's sleep`() {
+        val lateNight = at(2026, 3, 5, 2, 38)
+        assertEquals("2026-03-04", HealthyDay.dayOf(lateNight, athens))
+        assertEquals("2026-03-05", HealthyDay.sleepDayOf(lateNight, athens))
+    }
+
+    @Test
+    fun `a sleep day runs midnight to midnight`() {
+        assertEquals(at(2026, 3, 5, 0, 0), HealthyDay.sleepStartOf("2026-03-05", athens))
+        assertEquals(at(2026, 3, 6, 0, 0), HealthyDay.sleepEndOf("2026-03-05", athens))
+    }
+
+    /**
+     * The join the comparison table depends on: a night has to find the day
+     * whose coffee came before it, and the two no longer share a name.
+     */
+    @Test
+    fun `a night after midnight belongs to the previous intake day`() {
+        val sleptAt = at(2026, 3, 5, 2, 38)
+        assertEquals(
+            "2026-03-04",
+            HealthyDay.intakeDayForNight("2026-03-05", sleptAt, athens),
+        )
+    }
+
+    /** Falling asleep before midnight keeps the night and the intake aligned. */
+    @Test
+    fun `a night before midnight belongs to the same intake day`() {
+        val sleptAt = at(2026, 3, 5, 23, 0)
+        assertEquals(
+            "2026-03-05",
+            HealthyDay.intakeDayForNight("2026-03-05", sleptAt, athens),
+        )
+    }
+
+    /** With no recorded start, the night is assumed to have begun at midnight. */
+    @Test
+    fun `an unknown sleep start falls back to the day being lived at midnight`() {
+        assertEquals("2026-03-04", HealthyDay.intakeDayForNight("2026-03-05", 0L, athens))
     }
 }

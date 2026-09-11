@@ -81,8 +81,8 @@ class HealthReader(private val context: Context) {
         val client = HealthConnect.client(context) ?: return Result.Failed("Health Connect is unavailable")
 
         return runCatching {
-            val dayStart = HealthyDay.startOf(date, zone)
-            val dayEnd = HealthyDay.endOf(date, zone)
+            val dayStart = HealthyDay.sleepStartOf(date, zone)
+            val dayEnd = HealthyDay.sleepEndOf(date, zone)
 
             val sessions = client.readRecords(
                 ReadRecordsRequest(
@@ -95,7 +95,7 @@ class HealthReader(private val context: Context) {
             ).records
 
             val forThisNight = sessions
-                .filter { HealthyDay.dayOf(it.startTime.toEpochMilli(), zone) == date }
+                .filter { HealthyDay.sleepDayOf(it.startTime.toEpochMilli(), zone) == date }
 
             // Two apps writing the same night produce overlapping records of
             // one sleep, and only the denser one should count. A night and a
@@ -263,7 +263,7 @@ class HealthReader(private val context: Context) {
                 .maxByOrNull { it.endTime.toEpochMilli() }
                 ?.let {
                     RecentSession(
-                        date = HealthyDay.dayOf(it.startTime.toEpochMilli(), zone),
+                        date = HealthyDay.sleepDayOf(it.startTime.toEpochMilli(), zone),
                         endMillis = it.endTime.toEpochMilli(),
                         minutes = ((it.endTime.toEpochMilli() - it.startTime.toEpochMilli()) / 60_000L).toInt(),
                     )

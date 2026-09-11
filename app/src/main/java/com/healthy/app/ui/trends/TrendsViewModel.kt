@@ -53,13 +53,18 @@ class TrendsViewModel(app: Application) : AndroidViewModel(app) {
         // because a day with caffeine and no night is still a data point.
         val today = HealthyDay.today()
         val days = (0 until WINDOW_DAYS).map { HealthyDay.plusDays(today, -(WINDOW_DAYS - 1L - it)) }
-        val nightsByDate = nights.associateBy { it.date }
+        // Keyed by the intake day each night followed, not by its own name:
+        // with sleep numbered from midnight and intake from 04:00, a night and
+        // the day whose coffee preceded it no longer share a date.
+        val nightsByIntakeDay = nights.associateBy {
+            HealthyDay.intakeDayForNight(it.date, it.sleepStart)
+        }
 
         val points = days.map { date ->
             val from = HealthyDay.startOf(date)
             val to = HealthyDay.endOf(date)
             val dayDrinks = drinks.filter { it.timestamp in from until to }
-            val night = nightsByDate[date]
+            val night = nightsByIntakeDay[date]
             DayPoint(
                 date = date,
                 sleepHours = night?.minutes?.takeIf { it > 0 }?.let { it / 60.0 },
@@ -72,8 +77,9 @@ class TrendsViewModel(app: Application) : AndroidViewModel(app) {
         }
 
         val samples = nights.map { night ->
-            val from = HealthyDay.startOf(night.date)
-            val to = HealthyDay.endOf(night.date)
+            val intakeDay = HealthyDay.intakeDayForNight(night.date, night.sleepStart)
+            val from = HealthyDay.startOf(intakeDay)
+            val to = HealthyDay.endOf(intakeDay)
             val dayDrinks = drinks.filter { it.timestamp in from until to }
             Trends.Sample(
                 night = night,
