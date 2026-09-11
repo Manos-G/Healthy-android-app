@@ -68,4 +68,29 @@ class SleepSessionsTest {
         assertEquals(emptyList<SleepAnalysis.Session>(), SleepAnalysis.distinctSleeps(emptyList()))
         assertEquals(0, SleepAnalysis.totalMinutes(emptyList()))
     }
+
+    /**
+     * The night reported from the phone: an afternoon sleep of 5 h 07 m and an
+     * early-morning one of 3 h 24 m, both filed under the same logical day
+     * because the second began before 04:00.
+     *
+     * The total is right at 8 h 31 m. What was wrong was describing it with
+     * the earliest start and the latest end, which claimed a single sleep from
+     * 13:22 to 06:00 — seventeen hours, eight of them awake.
+     */
+    @Test
+    fun `the longest sleep is the one the clock times describe`() {
+        val afternoon = SleepAnalysis.Session(at(13, 22), at(18, 29), stageCount = 30)
+        val earlyHours = SleepAnalysis.Session(at(26, 36), at(30, 0), stageCount = 20)
+        val sleeps = SleepAnalysis.distinctSleeps(listOf(afternoon, earlyHours))
+
+        assertEquals(2, sleeps.size)
+        assertEquals(511, SleepAnalysis.totalMinutes(sleeps))
+
+        val main = sleeps.maxByOrNull { it.millis }!!
+        assertEquals(afternoon, main)
+        assertEquals(307, (main.millis / 60_000L).toInt())
+        // The stretch that must never be reported as one sleep.
+        assertEquals(998, ((sleeps.maxOf { it.end } - sleeps.minOf { it.start }) / 60_000L).toInt())
+    }
 }

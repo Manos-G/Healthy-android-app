@@ -82,6 +82,8 @@ data class MorningForm(
     val measuredMinutes: Int? = null,
     /** How many separate sleeps that measurement covers. */
     val sleepCount: Int = 1,
+    /** The sleep the two clock times describe, when the day held more than one. */
+    val mainSleepMinutes: Int? = null,
     val sleepEndMillis: Long = 0,
     /** Both cycle lengths, labelled by source (spec 18.5). */
     val watchCycleMinutes: Int? = null,
@@ -106,15 +108,26 @@ data class MorningForm(
             return span.toInt()
         }
 
+    /**
+     * The duration, said so it cannot contradict the times beside it.
+     *
+     * With a night and a nap the two clock times describe the longest sleep
+     * only, and the total covers both. Printing the total alone next to those
+     * times claimed a sleep of a length nobody had.
+     */
     val durationLabel: String
-        get() = minutes?.let {
-            buildString {
-                append("${it / 60} h ${it % 60} m")
-                // Otherwise a duration shorter than the clock times imply
-                // looks like an error rather than the sum it is.
-                if (sleepCount > 1) append(" across $sleepCount sleeps")
+        get() {
+            val total = minutes ?: return "—"
+            val main = mainSleepMinutes
+            if (sleepCount <= 1 || main == null || main == total) {
+                return "${total / 60} h ${total % 60} m"
             }
-        } ?: "—"
+            val rest = (total - main).coerceAtLeast(0)
+            return "${main / 60} h ${main % 60} m here, " +
+                "plus ${rest / 60} h ${rest % 60} m in " +
+                (if (sleepCount == 2) "another sleep" else "${sleepCount - 1} other sleeps") +
+                " — ${total / 60} h ${total % 60} m in all"
+        }
 
     /** A night is worth saving once it has times or a rating. */
     val canSave: Boolean
@@ -176,6 +189,10 @@ class MorningViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Minutes between two stored instants, or null when either is missing. */
+    private fun spanMinutes(start: Long, end: Long): Int? =
+        if (start > 0 && end > start) ((end - start) / 60_000L).toInt() else null
+
     private suspend fun load(night: Night?, date: String) {
         val from = HealthyDay.startOf(date)
         val to = HealthyDay.endOf(date)
@@ -218,6 +235,8 @@ class MorningViewModel(app: Application) : AndroidViewModel(app) {
                 // that two sleeps made smaller than the stretch they cover.
                 measuredMinutes = night.minutes.takeIf { it > 0 },
                 sleepCount = night.sleepCount,
+                // Derived from the stored times, which describe the main sleep.
+                mainSleepMinutes = spanMinutes(night.sleepStart, night.sleepEnd),
                 stageSummary = stageSummary(night),
                 caffeineMg = dayDrinks.sumOf { it.mg },
                 caffeineCount = dayDrinks.size,
@@ -323,6 +342,7 @@ class MorningViewModel(app: Application) : AndroidViewModel(app) {
                             SyncedField.SLEEP_START !in edited && SyncedField.SLEEP_END !in edited
                         },
                         sleepCount = result.data.sleepCount,
+                        mainSleepMinutes = result.data.mainSleepMinutes,
                         hypnogram = hypnogram,
                         stageBlocks = result.data.stageBlocks,
                         sleepStartMillis = result.data.sleepStart,

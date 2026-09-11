@@ -49,6 +49,13 @@ class HealthReader(private val context: Context) {
          * between the first and the last.
          */
         val sleepCount: Int = 1,
+        /**
+         * The longest sleep, which [sleepStart] and [sleepEnd] describe.
+         *
+         * Separate from [minutes], which is every sleep of the day added up.
+         * When they differ the day held a nap as well as a night.
+         */
+        val mainSleepMinutes: Int = 0,
         /** Which app supplied the heart rate, which may differ from the sleep. */
         val heartRateSource: String? = null,
         /** Individual samples, which spec 18.3 requires over the 30-minute groups. */
@@ -105,25 +112,37 @@ class HealthReader(private val context: Context) {
                 }
             )
             if (chosen.isEmpty()) return@runCatching Result.NoSession
-            val records = chosen.map { forThisNight[it.index] }
-            val session = records.maxByOrNull { it.stages.size } ?: records.first()
 
-            // The span, for the hypnogram's axis and the bedtime figure.
-            val start = chosen.minOf { it.start }
-            val end = chosen.maxOf { it.end }
-            // Time asleep is the sum, never the span: a nap at 15:00 after a
-            // night that ended at 09:00 must not count the hours between.
+            /*
+             * One of these sleeps is the night and the rest are naps.
+             *
+             * Taking the earliest start and the latest end described a stretch
+             * that was never one sleep: an afternoon at 13:22 and an early
+             * morning ending at 06:00 read as "asleep 13:22 to 06:00", which
+             * is seventeen hours of which eight were spent awake. The times
+             * now describe the longest sleep, which is a real one, and the
+             * others are counted separately.
+             */
+            val main = chosen.maxByOrNull { it.millis } ?: chosen.first()
+            val session = forThisNight[main.index]
+
+            val start = main.start
+            val end = main.end
+            val mainMinutes = (main.millis / 60_000L).toInt()
+            // Time asleep across the day is the sum, never the span.
             val minutes = SleepAnalysis.totalMinutes(chosen)
 
-            val blocks = records.flatMap { record ->
-                record.stages.map { stage ->
-                    StageBlock(
-                        nightDate = date,
-                        type = stage.stage.toStageName(),
-                        startTime = stage.startTime.toEpochMilli(),
-                        endTime = stage.endTime.toEpochMilli(),
-                    )
-                }
+            // The stages, the hypnogram and the resting heart rate all
+            // describe the main sleep, because they are drawn against its
+            // start and end and a nap's blocks inside that window would be
+            // hours of empty chart.
+            val blocks = session.stages.map { stage ->
+                StageBlock(
+                    nightDate = date,
+                    type = stage.stage.toStageName(),
+                    startTime = stage.startTime.toEpochMilli(),
+                    endTime = stage.endTime.toEpochMilli(),
+                )
             }.sortedBy { it.startTime }
 
             // A record has to be read by a window wide enough to CONTAIN it,
@@ -198,6 +217,7 @@ class HealthReader(private val context: Context) {
                     sleepStart = start,
                     sleepEnd = end,
                     minutes = minutes,
+                    mainSleepMinutes = mainMinutes,
                     stageBlocks = blocks,
                     totals = SleepAnalysis.stageTotals(blocks),
                     restingHr = SleepAnalysis.restingHeartRate(bpmForResting),
