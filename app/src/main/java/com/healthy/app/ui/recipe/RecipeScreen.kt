@@ -125,8 +125,17 @@ fun RecipeScreen(
         }
     }
 
-    if (building) {
-        BuilderDialog(draft, vm, onDone = { building = false })
+    val editing by vm.editing.collectAsStateWithLifecycle()
+    if (building || editing != null) {
+        BuilderDialog(
+            draft = draft,
+            vm = vm,
+            existing = editing,
+            onDone = {
+                building = false
+                vm.cancelEdit()
+            },
+        )
     }
 }
 
@@ -153,6 +162,9 @@ private fun RecipeRow(card: RecipeCard, targetKcal: Int?, vm: RecipeViewModel) {
                     color = HealthyColors.Muted,
                     fontSize = 11.sp,
                 )
+            }
+            TextButton(onClick = { vm.beginEdit(card) }) {
+                Text("Edit", color = HealthyColors.Muted, fontSize = 13.sp)
             }
             TextButton(onClick = { open = !open }) {
                 Text(if (open) "Hide" else "Log", color = HealthyColors.Sleep, fontSize = 13.sp)
@@ -295,10 +307,17 @@ private fun PortionButton(label: String, kcal: Double, targetKcal: Int?, onClick
 
 /** Spec 13.3 and 13.4: ingredients first, then the weight of the finished dish. */
 @Composable
-private fun BuilderDialog(draft: List<DraftItem>, vm: RecipeViewModel, onDone: () -> Unit) {
-    var name by remember { mutableStateOf("") }
-    var cooked by remember { mutableStateOf("") }
-    var portions by remember { mutableStateOf("4") }
+private fun BuilderDialog(
+    draft: List<DraftItem>,
+    vm: RecipeViewModel,
+    existing: com.healthy.app.data.entity.Recipe? = null,
+    onDone: () -> Unit,
+) {
+    var name by remember(existing) { mutableStateOf(existing?.name.orEmpty()) }
+    var cooked by remember(existing) {
+        mutableStateOf(existing?.cookedGrams?.toInt()?.toString().orEmpty())
+    }
+    var portions by remember(existing) { mutableStateOf(existing?.portions?.toString() ?: "4") }
     var picking by remember { mutableStateOf(false) }
 
     // The running total, recomputed whenever the draft changes. It reads the
@@ -328,7 +347,12 @@ private fun BuilderDialog(draft: List<DraftItem>, vm: RecipeViewModel, onDone: (
                     .verticalScroll(androidx.compose.foundation.rememberScrollState())
                     .imePadding(),
             ) {
-                Text("Build a recipe", color = HealthyColors.Paper, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                Text(
+                    if (existing == null) "Build a recipe" else "Edit ${existing.name}",
+                    color = HealthyColors.Paper,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },

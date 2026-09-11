@@ -19,6 +19,10 @@ interface MealDao {
     @Delete
     suspend fun delete(entry: MealEntry)
 
+    /** Correcting a portion or a meal already logged. */
+    @androidx.room.Update
+    suspend fun update(entry: MealEntry)
+
     @Query("SELECT * FROM meal_entry WHERE timestamp >= :from AND timestamp < :to ORDER BY timestamp ASC")
     fun observeBetween(from: Long, to: Long): Flow<List<MealEntry>>
 

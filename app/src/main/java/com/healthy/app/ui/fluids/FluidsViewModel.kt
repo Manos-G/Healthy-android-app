@@ -332,6 +332,40 @@ class FluidsViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /**
+     * Corrects a drink already logged.
+     *
+     * The amount is what changes, and everything the row carries follows from
+     * it: the caffeine, the fluid and the units are all recomputed from the
+     * drink's own strength rather than scaled, so a correction cannot drift
+     * away from what that drink actually is.
+     */
+    fun editAmount(row: Drink, amount: Int) {
+        viewModelScope.launch {
+            val settings = settingsStore.settings.first()
+            val beverage = BeverageCatalog.byName(row.name)
+            val corrected = if (beverage != null) {
+                row.copy(
+                    mg = beverage.caffeineMgFor(amount),
+                    volumeMl = beverage.fluidMlFor(amount),
+                    alcoholUnits = Alcohol.units(amount, beverage.abv, settings.mlPerAlcoholUnit),
+                )
+            } else {
+                // Not in the catalog — a scanned or custom drink. Its strength
+                // is only knowable from the row itself, so scale by ratio.
+                val was = row.volumeMl.takeIf { it > 0 } ?: amount
+                val factor = amount.toDouble() / was
+                row.copy(
+                    mg = Math.round(row.mg * factor).toInt(),
+                    volumeMl = amount,
+                    alcoholUnits = row.alcoholUnits * factor,
+                )
+            }
+            drinks.update(corrected)
+            tick.value = System.currentTimeMillis()
+        }
+    }
+
     fun delete(drink: Drink) {
         viewModelScope.launch {
             drinks.delete(drink)

@@ -293,6 +293,20 @@ class FoodViewModel(app: Application) : AndroidViewModel(app) {
         _shareMessage.value = null
     }
 
+    /**
+     * Corrects a logged meal in place.
+     *
+     * The grams and the meal it belonged to are the two things worth changing
+     * — what was eaten is decided by the product or recipe behind it, and
+     * changing that would be a different entry rather than a correction.
+     */
+    fun edit(entry: MealEntry, grams: Double, mealType: String) {
+        viewModelScope.launch {
+            meals.update(entry.copy(grams = grams, mealType = mealType))
+            now.value = System.currentTimeMillis()
+        }
+    }
+
     fun delete(entry: MealEntry) {
         viewModelScope.launch {
             meals.delete(entry)

@@ -47,6 +47,29 @@ class RecipeViewModel(app: Application) : AndroidViewModel(app) {
     private val _draft = MutableStateFlow<List<DraftItem>>(emptyList())
     val draft: StateFlow<List<DraftItem>> = _draft.asStateFlow()
 
+    /**
+     * The recipe being edited, or null when building a new one.
+     *
+     * Editing reuses the builder rather than duplicating it: the same screen,
+     * pre-filled. Saving with an id replaces that recipe's ingredients, which
+     * saveRecipe already does, so a corrected dish keeps its identity and
+     * every portion already logged against it stays attached.
+     */
+    private val _editing = MutableStateFlow<Recipe?>(null)
+    val editing: StateFlow<Recipe?> = _editing.asStateFlow()
+
+    fun beginEdit(card: RecipeCard) {
+        _editing.value = card.recipe
+        _draft.value = card.items.map {
+            DraftItem(it.name, it.grams, it.barcode, it.childRecipeId)
+        }
+    }
+
+    fun cancelEdit() {
+        _editing.value = null
+        _draft.value = emptyList()
+    }
+
     private val _message = MutableStateFlow<String?>(null)
     val message: StateFlow<String?> = _message.asStateFlow()
 
@@ -139,7 +162,14 @@ class RecipeViewModel(app: Application) : AndroidViewModel(app) {
         }
         viewModelScope.launch {
             val id = recipes.saveRecipe(
-                Recipe(name = name.trim(), cookedGrams = cookedGrams, portions = portions),
+                Recipe(
+                    // Keeping the id turns a save into a correction, so the
+                    // portions already logged against this dish stay attached.
+                    id = _editing.value?.id ?: 0,
+                    name = name.trim(),
+                    cookedGrams = cookedGrams,
+                    portions = portions,
+                ),
                 _draft.value.map {
                     RecipeItem(
                         recipeId = 0,
@@ -150,8 +180,14 @@ class RecipeViewModel(app: Application) : AndroidViewModel(app) {
                     )
                 },
             )
+            val wasEditing = _editing.value != null
             _draft.value = emptyList()
-            _message.value = "Saved “${name.trim()}”. It is one tap from now on."
+            _editing.value = null
+            _message.value = if (wasEditing) {
+                "Updated “${name.trim()}”."
+            } else {
+                "Saved “${name.trim()}”. It is one tap from now on."
+            }
             refresh.value++
             onDone()
         }

@@ -66,11 +66,29 @@ fun FoodScreen(
     val query by vm.query.collectAsStateWithLifecycle()
     val pending by vm.pendingPortion.collectAsStateWithLifecycle()
     var manual by remember { mutableStateOf(false) }
+    // The logged item being corrected. A history you can only delete from
+    // forces a mistake to be deleted and re-entered.
+    var editingMeal by remember { mutableStateOf<LoggedItem?>(null) }
     var showRecipes by remember { mutableStateOf(false) }
     // The day's target, so every calorie figure can say what share of it it is.
     val energy = androidx.lifecycle.viewmodel.compose.viewModel<com.healthy.app.ui.energy.EnergyViewModel>()
     val energyState by energy.state.collectAsStateWithLifecycle()
     val targetKcal = energyState.plan?.targetKcal
+
+    editingMeal?.let { item ->
+        EditMealDialog(
+            item = item,
+            onSave = { grams, meal ->
+                vm.edit(item.entry, grams, meal)
+                editingMeal = null
+            },
+            onDelete = {
+                vm.delete(item.entry)
+                editingMeal = null
+            },
+            onDismiss = { editingMeal = null },
+        )
+    }
 
     if (showRecipes) {
         com.healthy.app.ui.recipe.RecipeScreen(
@@ -186,7 +204,10 @@ fun FoodScreen(
                 } else {
                     state.listed.forEach { item ->
                         Row(
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { editingMeal = item }
+                                .padding(vertical = 4.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Text(
@@ -367,23 +388,7 @@ private fun PortionDialog(
                     Modifier.fillMaxWidth().padding(top = 12.dp),
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
-                    listOf(
-                        MealEntry.BREAKFAST to "breakfast",
-                        MealEntry.LUNCH to "lunch",
-                        MealEntry.DINNER to "dinner",
-                        MealEntry.SNACK to "snack",
-                    ).forEach { (value, label) ->
-                        val selected = mealType == value
-                        TextButton(
-                            onClick = { mealType = value },
-                            colors = ButtonDefaults.textButtonColors(
-                                contentColor = if (selected) HealthyColors.Sleep else HealthyColors.Muted,
-                            ),
-                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
-                        ) {
-                            Text(label, fontSize = 11.sp)
-                        }
-                    }
+                    MealTypeButtons(mealType) { mealType = it }
                 }
 
                 HorizontalDivider(color = HealthyColors.Rule, modifier = Modifier.padding(vertical = 10.dp))
@@ -472,6 +477,120 @@ private fun PortionDialog(
 
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                     TextButton(onClick = onDismiss) { Text("Cancel", color = HealthyColors.Muted) }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Correcting a meal already logged.
+ *
+ * The weight and which meal it belonged to are what can change. What was
+ * eaten is decided by the product or recipe behind the entry; swapping that
+ * would be a different meal rather than a correction, and is better done by
+ * deleting this one and logging the right thing.
+ */
+/** Which meal an entry belongs to, shared by the logging and editing dialogs. */
+@Composable
+private fun MealTypeButtons(selected: String, onSelect: (String) -> Unit) {
+    listOf(
+        MealEntry.BREAKFAST to "breakfast",
+        MealEntry.LUNCH to "lunch",
+        MealEntry.DINNER to "dinner",
+        MealEntry.SNACK to "snack",
+    ).forEach { (value, label) ->
+        TextButton(
+            onClick = { onSelect(value) },
+            colors = ButtonDefaults.textButtonColors(
+                contentColor = if (selected == value) HealthyColors.Sleep else HealthyColors.Muted,
+            ),
+            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
+        ) {
+            Text(label, fontSize = 11.sp)
+        }
+    }
+}
+
+@Composable
+private fun EditMealDialog(
+    item: LoggedItem,
+    onSave: (Double, String) -> Unit,
+    onDelete: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var grams by remember(item) { mutableStateOf(item.entry.grams.toInt().toString()) }
+    var meal by remember(item) { mutableStateOf(item.entry.mealType) }
+    val value = grams.toDoubleOrNull()
+
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = HealthyColors.Raised),
+        ) {
+            Column(Modifier.padding(18.dp)) {
+                Text(
+                    item.name,
+                    color = HealthyColors.Paper,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                item.product?.kcal100?.let {
+                    Text(
+                        "${it.toInt()} kcal per 100 g",
+                        color = HealthyColors.Muted,
+                        fontSize = 11.sp,
+                        modifier = Modifier.padding(top = 2.dp),
+                    )
+                }
+                OutlinedTextField(
+                    value = grams,
+                    onValueChange = { v -> grams = v.filter { c -> c.isDigit() || c == '.' } },
+                    label = { Text("Grams", fontSize = 11.sp) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+                    colors = foodFieldColours(),
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                        keyboardType = KeyboardType.Decimal,
+                    ),
+                )
+                Row(
+                    Modifier.fillMaxWidth().padding(top = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    MealTypeButtons(meal) { meal = it }
+                }
+
+                value?.takeIf { it > 0 }?.let { g ->
+                    item.product?.let { product ->
+                        Text(
+                            "${g.toInt()} g is ${Nutrition.forGrams(product, g).kcal.toInt()} kcal.",
+                            color = HealthyColors.Sleep,
+                            fontSize = 12.sp,
+                            modifier = Modifier.padding(top = 8.dp),
+                        )
+                    }
+                }
+
+                Row(
+                    Modifier.fillMaxWidth().padding(top = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    TextButton(onClick = onDelete) {
+                        Text("Delete", color = HealthyColors.Warn, fontSize = 13.sp)
+                    }
+                    Row {
+                        TextButton(onClick = onDismiss) {
+                            Text("Cancel", color = HealthyColors.Muted, fontSize = 13.sp)
+                        }
+                        TextButton(
+                            onClick = { value?.let { onSave(it, meal) } },
+                            enabled = value != null && value > 0,
+                        ) {
+                            Text("Save", color = HealthyColors.Sleep, fontSize = 13.sp)
+                        }
+                    }
                 }
             }
         }

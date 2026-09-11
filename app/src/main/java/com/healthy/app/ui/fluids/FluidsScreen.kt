@@ -1,5 +1,6 @@
 package com.healthy.app.ui.fluids
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -70,6 +71,8 @@ fun FluidsScreen(
     // is open. Only one of each can be true at a time.
     var picking by remember { mutableStateOf<Beverage?>(null) }
     var browsing by remember { mutableStateOf<BeverageCategory?>(null) }
+    // A logged drink being corrected, rather than deleted and logged again.
+    var editing by remember { mutableStateOf<Drink?>(null) }
 
     // One tap logs; the snackbar is the only chance to take it back (spec 5.1).
     LaunchedEffect(lastLogged) {
@@ -104,7 +107,7 @@ fun FluidsScreen(
                 )
             }
         }
-        item { EntriesCard(state, vm::setWindow, vm::delete) }
+        item { EntriesCard(state, vm::setWindow, { editing = it }, vm::delete) }
         item {
             com.healthy.app.scan.ScanButton(modifier = Modifier.fillMaxWidth())
         }
@@ -125,6 +128,28 @@ fun FluidsScreen(
                 picking = drink
             },
             onDismiss = { browsing = null },
+        )
+    }
+
+    editing?.let { row ->
+        val beverage = remember(row) {
+            com.healthy.app.core.BeverageCatalog.byName(row.name)
+                ?: Beverage(
+                    name = row.name,
+                    category = BeverageCategory.Water,
+                    defaultMl = row.volumeMl.takeIf { it > 0 } ?: 100,
+                )
+        }
+        AmountDialog(
+            beverage = beverage,
+            mlPerUnit = state.mlPerUnit,
+            startMl = row.volumeMl.takeIf { it > 0 } ?: beverage.defaultMl,
+            correcting = true,
+            onConfirm = { amount, _ ->
+                vm.editAmount(row, amount)
+                editing = null
+            },
+            onDismiss = { editing = null },
         )
     }
 
@@ -573,6 +598,7 @@ private fun entryFigure(entry: Drink): String = when {
 private fun EntriesCard(
     state: FluidsState,
     onWindow: (com.healthy.app.core.LogWindow) -> Unit,
+    onEdit: (Drink) -> Unit,
     onDelete: (Drink) -> Unit,
 ) {
     SectionCard {
@@ -587,7 +613,7 @@ private fun EntriesCard(
                     "app counts it against. Step back to correct an earlier day."
             } else {
                 "One whole day, 04:00 to 04:00."
-            },
+            } + " Tap one to change how much.",
             color = HealthyColors.Muted,
             fontSize = 11.sp,
             modifier = Modifier.padding(top = 2.dp, bottom = 8.dp),
@@ -623,7 +649,10 @@ private fun EntriesCard(
                 }
             }
             Row(
-                modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onEdit(entry) }
+                    .padding(vertical = 2.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(

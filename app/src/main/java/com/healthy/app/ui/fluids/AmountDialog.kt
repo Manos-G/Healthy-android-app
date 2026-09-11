@@ -36,6 +36,8 @@ fun AmountDialog(
     beverage: Beverage,
     mlPerUnit: Double = Alcohol.DEFAULT_ML_PER_UNIT,
     startMl: Int = beverage.defaultMl,
+    /** Correcting an entry already logged: no time to choose, it happened. */
+    correcting: Boolean = false,
     onConfirm: (amount: Int, minutesAgo: Int) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -75,11 +77,13 @@ fun AmountDialog(
                     modifier = Modifier.padding(top = 14.dp),
                 )
 
-                com.healthy.app.ui.components.WhenPicker(
-                    minutesAgo = minutesAgo,
-                    now = now,
-                    modifier = Modifier.padding(top = 14.dp),
-                ) { minutesAgo = it }
+                if (!correcting) {
+                    com.healthy.app.ui.components.WhenPicker(
+                        minutesAgo = minutesAgo,
+                        now = now,
+                        modifier = Modifier.padding(top = 14.dp),
+                    ) { minutesAgo = it }
+                }
 
                 Row(
                     Modifier.fillMaxWidth().padding(top = 10.dp),
@@ -87,7 +91,7 @@ fun AmountDialog(
                 ) {
                     TextButton(onClick = onDismiss) { Text("Cancel", color = HealthyColors.Muted) }
                     TextButton(onClick = { onConfirm(amount, minutesAgo) }) {
-                        Text("Log it", color = HealthyColors.Sleep)
+                        Text(if (correcting) "Save" else "Log it", color = HealthyColors.Sleep)
                     }
                 }
             }
