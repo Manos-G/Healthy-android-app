@@ -235,7 +235,13 @@ class EnergyViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             val weights = db.weightDao()
             val bodyWeight = weights.mostRecent()?.weightKg
-            targetKg?.let { settingsStore.setGoalTargetKg(it) }
+            targetKg?.let {
+                settingsStore.setGoalTargetKg(it)
+                // The distance is measured from where the goal began, so it
+                // is captured here as well as on the Weight tab — the two set
+                // the same goal and must record it the same way.
+                bodyWeight?.let { kg -> settingsStore.setGoalStartKg(kg) }
+            }
 
             if (rateKgPerWeek != null) {
                 if (bodyWeight == null) {

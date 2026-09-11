@@ -254,7 +254,7 @@ class HealthReader(private val context: Context) {
     data class ExternalWeight(
         val kilograms: Double,
         val atMillis: Long,
-        /** Which app wrote it, so the user can see whether OpenScale does. */
+        /** Which app wrote it, so the user can see where a weight came from. */
         val source: String,
     )
 
@@ -322,7 +322,7 @@ class HealthReader(private val context: Context) {
         /** Which apps are writing, now that more than one can be. */
         val sleepSources: Set<String>,
         val heartRateSources: Set<String>,
-        /** Answers spec 8.4's open question: does OpenScale write here? */
+        /** Which apps write weights here, so a missing reading can be traced. */
         val weightRecords: Int,
         val weightSources: Set<String>,
     )

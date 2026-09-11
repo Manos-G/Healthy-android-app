@@ -66,6 +66,18 @@ data class HealthySettings(
     /** Where the change goal is heading. A destination, never a deadline. */
     val goalTargetKg: Double? = null,
 
+    /**
+     * The weight the goal started from, captured when the goal was set.
+     *
+     * Progress is a fraction of the distance, and a distance needs both ends.
+     * Taken once rather than tracked, because a start that moved with the
+     * current weight would keep progress at zero forever.
+     */
+    val goalStartKg: Double? = null,
+
+    /** The last milestone congratulated, so it is said once and not on every open. */
+    val goalCelebratedPercent: Int = 0,
+
     /** The last calculated maintenance energy, and what it was based on. */
     val maintenanceKcal: Int? = null,
     val maintenanceMeasured: Boolean = false,
@@ -109,6 +121,8 @@ class SettingsStore(private val context: Context) {
             ageYears = prefs[KEY_AGE],
             sexMale = prefs[KEY_SEX_MALE],
             goalTargetKg = prefs[KEY_GOAL_TARGET],
+            goalStartKg = prefs[KEY_GOAL_START_KG],
+            goalCelebratedPercent = prefs[KEY_GOAL_CELEBRATED] ?: 0,
             maintenanceKcal = prefs[KEY_MAINT_KCAL],
             maintenanceMeasured = prefs[KEY_MAINT_MEASURED] ?: false,
             maintenanceDays = prefs[KEY_MAINT_DAYS] ?: 0,
@@ -145,6 +159,15 @@ class SettingsStore(private val context: Context) {
     }
 
     suspend fun setGoalTargetKg(value: Double) = edit { it[KEY_GOAL_TARGET] = value }
+
+    suspend fun setGoalStartKg(value: Double) = edit {
+        it[KEY_GOAL_START_KG] = value
+        // A new goal starts uncelebrated, or the old milestones would suppress
+        // every congratulation on the way to the new target.
+        it[KEY_GOAL_CELEBRATED] = 0
+    }
+
+    suspend fun setGoalCelebratedPercent(value: Int) = edit { it[KEY_GOAL_CELEBRATED] = value }
 
     suspend fun setMaintenance(kcal: Int, measured: Boolean, days: Int) = edit {
         it[KEY_MAINT_KCAL] = kcal
@@ -204,6 +227,8 @@ class SettingsStore(private val context: Context) {
         val KEY_SEX_MALE: Preferences.Key<Boolean> =
             androidx.datastore.preferences.core.booleanPreferencesKey("sex_male")
         val KEY_GOAL_TARGET: Preferences.Key<Double> = doublePreferencesKey("goal_target_kg")
+        val KEY_GOAL_START_KG: Preferences.Key<Double> = doublePreferencesKey("goal_start_kg")
+        val KEY_GOAL_CELEBRATED: Preferences.Key<Int> = intPreferencesKey("goal_celebrated_pct")
         val KEY_MAINT_KCAL: Preferences.Key<Int> = intPreferencesKey("maintenance_kcal")
         val KEY_MAINT_MEASURED: Preferences.Key<Boolean> =
             androidx.datastore.preferences.core.booleanPreferencesKey("maintenance_measured")

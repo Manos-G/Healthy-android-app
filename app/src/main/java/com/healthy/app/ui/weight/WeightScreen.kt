@@ -31,8 +31,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.width
+import com.healthy.app.data.entity.Weight
+import androidx.compose.material3.HorizontalDivider
 import com.healthy.app.data.HealthySettings
 import com.healthy.app.ui.theme.HealthyColors
+import java.time.LocalDate
 import kotlin.math.abs
 
 @Composable
@@ -115,6 +120,7 @@ fun WeightScreen(
             item { BodyFatCard(state) }
         }
         item { GoalCard(state, vm) }
+        item { HistoryCard(state, vm) }
         item { ImportCard(vm) }
     }
 }
@@ -198,6 +204,16 @@ private fun GoalCard(state: WeightState, vm: WeightViewModel) {
     }
     var goalText by remember(state.goalTargetKg) {
         mutableStateOf(state.goalTargetKg?.let { "%.1f".format(it) } ?: "")
+    }
+
+    // Said once per milestone. The acknowledgement is stored, so it does not
+    // reappear on every visit, and a new goal clears it.
+    state.celebrate?.let { milestone ->
+        CelebrationDialog(
+            percent = milestone,
+            targetKg = state.goalTargetKg,
+            onDismiss = { vm.acknowledgeCelebration(milestone) },
+        )
     }
 
     SectionCard {
@@ -418,33 +434,18 @@ private fun goalFieldColors() = androidx.compose.material3.OutlinedTextFieldDefa
 @Composable
 private fun ImportCard(vm: WeightViewModel) {
     val status by vm.importStatus.collectAsStateWithLifecycle()
-    val picker = androidx.activity.compose.rememberLauncherForActivityResult(
-        androidx.activity.result.contract.ActivityResultContracts.OpenDocument()
-    ) { uri -> if (uri != null) vm.importOpenScale(uri) }
 
     SectionCard {
         Text("From a scale", color = HealthyColors.Paper, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
         Text(
-            "Health Connect first, then an OpenScale CSV, then the wheel above. " +
-                "A date already stored is left alone either way, so both are safe to repeat.",
+            "Health Connect first, then the wheel above. A date already stored is " +
+                "left alone, so this is safe to repeat.",
             color = HealthyColors.Muted,
             fontSize = 12.sp,
             modifier = Modifier.padding(top = 4.dp, bottom = 10.dp),
         )
         androidx.compose.material3.OutlinedButton(
             onClick = { vm.syncFromHealthConnect() },
-            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-            shape = RoundedCornerShape(10.dp),
-            border = androidx.compose.foundation.BorderStroke(1.dp, HealthyColors.Rule),
-            colors = ButtonDefaults.outlinedButtonColors(
-                containerColor = HealthyColors.Raised2,
-                contentColor = HealthyColors.Paper,
-            ),
-        ) {
-            Text("Read weights from Health Connect", fontSize = 14.sp)
-        }
-        androidx.compose.material3.OutlinedButton(
-            onClick = { picker.launch(arrayOf("text/csv", "text/comma-separated-values", "*/*")) },
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(10.dp),
             border = androidx.compose.foundation.BorderStroke(1.dp, HealthyColors.Rule),
@@ -453,7 +454,7 @@ private fun ImportCard(vm: WeightViewModel) {
                 contentColor = HealthyColors.Paper,
             ),
         ) {
-            Text("Import OpenScale CSV", fontSize = 14.sp)
+            Text("Read weights from Health Connect", fontSize = 14.sp)
         }
         if (status != null) {
             Text(
@@ -499,6 +500,33 @@ private fun TrendCard(state: WeightState) {
                 modifier = Modifier.padding(top = 4.dp),
             )
         }
+        state.goalProgressPercent?.let { percent ->
+            Text(
+                "$percent% of the way there",
+                color = HealthyColors.Paper,
+                fontSize = 13.sp,
+                modifier = Modifier.padding(top = 10.dp),
+            )
+            androidx.compose.material3.LinearProgressIndicator(
+                progress = { percent / 100f },
+                modifier = Modifier.fillMaxWidth().padding(top = 4.dp).height(6.dp),
+                color = HealthyColors.Sleep,
+                trackColor = HealthyColors.Raised2,
+                strokeCap = androidx.compose.ui.graphics.StrokeCap.Round,
+                gapSize = 0.dp,
+                drawStopIndicator = {},
+            )
+            // Measured on the smoothed trend, not this morning's reading: a
+            // day of salt moves the scale a kilogram, and a congratulation
+            // that arrives on water and leaves again is worse than none.
+            Text(
+                "Measured on the trend line, so it does not jump with a salty day.",
+                color = HealthyColors.Muted,
+                fontSize = 10.sp,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        }
+
         state.goalTargetKg?.takeIf { state.goalMode == HealthySettings.GOAL_CHANGE }?.let { target ->
             val current = state.points.lastOrNull()?.trendKg
             Text(
@@ -517,50 +545,102 @@ private fun TrendCard(state: WeightState) {
         }
 
         if (state.points.size >= 2) {
-            Canvas(Modifier.fillMaxWidth().height(120.dp).padding(top = 12.dp)) {
-                val points = state.points
+            /*
+             * Two things were wrong here, and both changed what the chart
+             * said rather than only how it looked.
+             *
+             * Points were spaced by their position in the list, so three
+             * readings on Monday, Tuesday and the following Friday were drawn
+             * evenly apart. A gap in weighing became invisible and the line's
+             * slope — the one thing a weight chart is read for — was wrong.
+             * They are spaced by date now.
+             *
+             * The projection was drawn on a second, narrower scale of its own,
+             * so it started at a different x from the last real point and the
+             * plan appeared detached from the trend it continues. Both share
+             * one scale spanning history and projection together.
+             */
+            val dayMillis = 86_400_000.0
+            val firstDay = remember(state.points) {
+                LocalDate.parse(state.points.first().date).toEpochDay()
+            }
+            val lastDay = remember(state.points) {
+                LocalDate.parse(state.points.last().date).toEpochDay()
+            }
+            val projectedDays = state.projection.size.coerceAtLeast(1) - 1
+            val spanDays = ((lastDay - firstDay) + projectedDays).coerceAtLeast(1L).toFloat()
+
+            val values = state.points.flatMap { listOf(it.weightKg, it.trendKg) } +
+                state.projection + listOfNotNull(state.goalTargetKg)
+            val lo = values.min() - 0.3
+            val hi = values.max() + 0.3
+
+            Canvas(Modifier.fillMaxWidth().height(150.dp).padding(top = 12.dp)) {
                 val w = size.width
                 val h = size.height
-                // The projection shares the axis, so it has to share the range
-                // or the two lines cannot be compared by eye.
-                val projected = state.projection
-                val values = points.flatMap { listOf(it.weightKg, it.trendKg) } +
-                    projected + listOfNotNull(state.goalTargetKg)
-                val lo = values.min() - 0.3
-                val hi = values.max() + 0.3
                 val span = (hi - lo).coerceAtLeast(0.1)
-                val step = if (points.size > 1) w / (points.size - 1) else w
+                val top = 4f
+                val bottom = h - 4f
 
-                fun y(v: Double) = (h - ((v - lo) / span).toFloat() * (h - 8f) - 4f)
+                fun y(v: Double) = bottom - ((v - lo) / span).toFloat() * (bottom - top)
+                fun x(dayOffset: Long) = (dayOffset / spanDays) * w
+
+                // A line every whole kilogram, so the vertical distance has a
+                // size the eye can read instead of being merely relative.
+                var gridKg = kotlin.math.ceil(lo).toInt()
+                while (gridKg <= hi) {
+                    val gy = y(gridKg.toDouble())
+                    drawLine(
+                        color = HealthyColors.Rule.copy(alpha = 0.45f),
+                        start = Offset(0f, gy),
+                        end = Offset(w, gy),
+                        strokeWidth = 1f,
+                    )
+                    gridKg++
+                }
+
+                state.goalTargetKg?.let { goal ->
+                    if (goal in lo..hi) {
+                        drawLine(
+                            color = HealthyColors.Caffeine.copy(alpha = 0.7f),
+                            start = Offset(0f, y(goal)),
+                            end = Offset(w, y(goal)),
+                            strokeWidth = 1.5f,
+                            pathEffect = androidx.compose.ui.graphics.PathEffect
+                                .dashPathEffect(floatArrayOf(3f, 5f)),
+                        )
+                    }
+                }
 
                 // The daily readings are the quiet element: they are noise
                 // from water, food and glycogen (spec 8.2).
-                points.forEachIndexed { i, p ->
+                state.points.forEach { p ->
+                    val px = x(LocalDate.parse(p.date).toEpochDay() - firstDay)
                     drawCircle(
                         color = HealthyColors.Muted.copy(alpha = 0.55f),
                         radius = 2.5f,
-                        center = Offset(i * step, y(p.weightKg)),
+                        center = Offset(px, y(p.weightKg)),
                     )
                 }
+
                 // The trend is the signal, so it is the strong element.
                 val path = Path()
-                points.forEachIndexed { i, p ->
-                    val x = i * step
-                    val yy = y(p.trendKg)
-                    if (i == 0) path.moveTo(x, yy) else path.lineTo(x, yy)
+                state.points.forEachIndexed { i, p ->
+                    val px = x(LocalDate.parse(p.date).toEpochDay() - firstDay)
+                    val py = y(p.trendKg)
+                    if (i == 0) path.moveTo(px, py) else path.lineTo(px, py)
                 }
                 drawPath(path, color = HealthyColors.Sleep, style = Stroke(width = 3f))
 
                 // Spec 8.6: the plan, drawn against what actually happened.
-                // Dashed, because it is a projection and not a measurement.
-                if (projected.size >= 2) {
-                    val total = points.size + projected.size - 1
-                    val projStep = if (total > 1) w / (total - 1) else w
+                // Dashed, because it is a projection and not a measurement,
+                // and starting exactly where the trend stops.
+                if (state.projection.size >= 2) {
                     val projPath = Path()
-                    projected.forEachIndexed { i, value ->
-                        val x = (points.size - 1 + i) * projStep
-                        val yy = y(value)
-                        if (i == 0) projPath.moveTo(x, yy) else projPath.lineTo(x, yy)
+                    state.projection.forEachIndexed { i, value ->
+                        val px = x(lastDay - firstDay + i)
+                        val py = y(value)
+                        if (i == 0) projPath.moveTo(px, py) else projPath.lineTo(px, py)
                     }
                     drawPath(
                         projPath,
@@ -572,18 +652,27 @@ private fun TrendCard(state: WeightState) {
                         ),
                     )
                 }
+            }
 
-                state.goalTargetKg?.let { goal ->
-                    val goalY = y(goal)
-                    drawLine(
-                        color = HealthyColors.Muted,
-                        start = Offset(0f, goalY),
-                        end = Offset(w, goalY),
-                        strokeWidth = 1f,
-                        pathEffect = androidx.compose.ui.graphics.PathEffect
-                            .dashPathEffect(floatArrayOf(3f, 5f)),
-                    )
+            // The scale in words. Without it the chart showed a shape and no
+            // sizes, so a 0.3 kg wobble and a 5 kg fall looked the same.
+            Row(
+                Modifier.fillMaxWidth().padding(top = 2.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text(
+                    "%.1f kg".format(lo),
+                    color = HealthyColors.Muted,
+                    fontSize = 10.sp,
+                )
+                state.goalTargetKg?.let {
+                    Text("goal ${"%.1f".format(it)}", color = HealthyColors.Caffeine, fontSize = 10.sp)
                 }
+                Text(
+                    "%.1f kg".format(hi),
+                    color = HealthyColors.Muted,
+                    fontSize = 10.sp,
+                )
             }
             Row(
                 Modifier.fillMaxWidth().padding(top = 6.dp),
@@ -610,6 +699,228 @@ private fun TrendCard(state: WeightState) {
         )
     }
 }
+
+/**
+ * Every reading, newest first, and a way to correct one.
+ *
+ * The chart showed the shape of the series and nothing else, so a reading
+ * entered as 87 instead of 78 could be seen as a spike and not reached. A
+ * tap opens it.
+ */
+@Composable
+private fun HistoryCard(state: WeightState, vm: WeightViewModel) {
+    var editing by remember { mutableStateOf<Weight?>(null) }
+
+    SectionCard {
+        Text(
+            "History",
+            color = HealthyColors.Paper,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.SemiBold,
+        )
+        if (state.history.isEmpty()) {
+            Text(
+                "Nothing logged yet.",
+                color = HealthyColors.Muted,
+                fontSize = 13.sp,
+                modifier = Modifier.padding(top = 6.dp),
+            )
+            return@SectionCard
+        }
+        Text(
+            "Tap a reading to correct or remove it.",
+            color = HealthyColors.Muted,
+            fontSize = 11.sp,
+            modifier = Modifier.padding(top = 2.dp, bottom = 6.dp),
+        )
+
+        // The change against the reading before it, which is what a person
+        // actually scans a list of weights for.
+        state.history.take(HISTORY_SHOWN).forEachIndexed { index, weight ->
+            val previous = state.history.getOrNull(index + 1)
+            val delta = previous?.let { weight.weightKg - it.weightKg }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { editing = weight }
+                    .padding(vertical = 7.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    weight.date,
+                    color = HealthyColors.Muted,
+                    fontSize = 12.sp,
+                    modifier = Modifier.width(86.dp),
+                )
+                Text(
+                    "%.1f kg".format(weight.weightKg),
+                    color = HealthyColors.Paper,
+                    fontSize = 14.sp,
+                    modifier = Modifier.weight(1f),
+                )
+                if (delta != null && abs(delta) >= 0.05) {
+                    Text(
+                        "%+.1f".format(delta),
+                        color = HealthyColors.Muted,
+                        fontSize = 12.sp,
+                    )
+                }
+                if (weight.source != Weight.MANUAL) {
+                    Text(
+                        " synced",
+                        color = HealthyColors.Rule,
+                        fontSize = 10.sp,
+                    )
+                }
+            }
+            HorizontalDivider(color = HealthyColors.Rule)
+        }
+        if (state.history.size > HISTORY_SHOWN) {
+            Text(
+                "${state.history.size - HISTORY_SHOWN} older readings not shown. " +
+                    "The full series is in the CSV export.",
+                color = HealthyColors.Muted,
+                fontSize = 11.sp,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+        }
+    }
+
+    editing?.let { weight ->
+        EditWeightDialog(
+            weight = weight,
+            onSave = { kg ->
+                vm.editWeight(weight, kg)
+                editing = null
+            },
+            onDelete = {
+                vm.deleteWeight(weight)
+                editing = null
+            },
+            onDismiss = { editing = null },
+        )
+    }
+}
+
+@Composable
+private fun EditWeightDialog(
+    weight: Weight,
+    onSave: (Double) -> Unit,
+    onDelete: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var text by remember(weight) { mutableStateOf("%.1f".format(weight.weightKg)) }
+    val value = text.toDoubleOrNull()
+
+    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
+        Card(
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = HealthyColors.Raised),
+        ) {
+            Column(Modifier.padding(18.dp)) {
+                Text(
+                    weight.date,
+                    color = HealthyColors.Paper,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    if (weight.source == Weight.MANUAL) {
+                        "Entered by hand."
+                    } else {
+                        "Came from ${weight.source}. Correcting it here makes it yours, " +
+                            "and the next sync will leave it alone."
+                    },
+                    color = HealthyColors.Muted,
+                    fontSize = 11.sp,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
+                androidx.compose.material3.OutlinedTextField(
+                    value = text,
+                    onValueChange = { v -> text = v.filter { it.isDigit() || it == '.' } },
+                    label = { Text("Kilograms", fontSize = 11.sp) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+                    colors = goalFieldColors(),
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                        keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal,
+                    ),
+                )
+                Row(
+                    Modifier.fillMaxWidth().padding(top = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    androidx.compose.material3.TextButton(onClick = onDelete) {
+                        Text("Delete", color = HealthyColors.Warn, fontSize = 13.sp)
+                    }
+                    Row {
+                        androidx.compose.material3.TextButton(onClick = onDismiss) {
+                            Text("Cancel", color = HealthyColors.Muted, fontSize = 13.sp)
+                        }
+                        androidx.compose.material3.TextButton(
+                            onClick = { value?.let(onSave) },
+                            enabled = value != null && value > 0,
+                        ) {
+                            Text("Save", color = HealthyColors.Sleep, fontSize = 13.sp)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * A word at each tenth of the way.
+ *
+ * Deliberately a dialog that has to be dismissed rather than a banner that
+ * lingers: it is said once, and then the screen goes back to being a set of
+ * numbers. Nothing here is a streak, and missing a milestone costs nothing.
+ */
+@Composable
+private fun CelebrationDialog(percent: Int, targetKg: Double?, onDismiss: () -> Unit) {
+    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
+        Card(
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = HealthyColors.Raised),
+        ) {
+            Column(
+                Modifier.padding(22.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(
+                    if (percent >= 100) "There." else "$percent%",
+                    color = HealthyColors.Sleep,
+                    fontSize = 38.sp,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    when {
+                        percent >= 100 && targetKg != null ->
+                            "You reached ${"%.1f".format(targetKg)} kg. The trend line got " +
+                                "there, which is the one that counts."
+                        percent >= 100 -> "You reached your goal weight."
+                        percent >= 50 -> "Past halfway. The trend is doing what you asked of it."
+                        else -> "$percent% of the way to your goal weight."
+                    },
+                    color = HealthyColors.Paper,
+                    fontSize = 13.sp,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+                androidx.compose.material3.TextButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.padding(top = 10.dp),
+                ) {
+                    Text("Good", color = HealthyColors.Sleep)
+                }
+            }
+        }
+    }
+}
+
+private const val HISTORY_SHOWN = 30
 
 @Composable
 private fun SectionCard(content: @Composable ColumnScope.() -> Unit) {

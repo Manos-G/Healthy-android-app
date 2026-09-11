@@ -135,4 +135,40 @@ object WeightGoal {
 
         return Progress(rateKgPerWeek, actual, targetLine)
     }
+
+    /** Milestones are congratulated every this many percent of the way. */
+    const val MILESTONE_STEP = 10
+
+    /**
+     * How far along the goal is, as a percentage of the distance set out to
+     * cover.
+     *
+     * Measured against the smoothed trend, not the morning's reading: a day of
+     * salt can move the scale a kilogram, and a congratulation that arrives
+     * because of water and leaves again the next day is worse than none.
+     *
+     * Null when there is nothing to measure — no goal, no starting point, or a
+     * goal set at the weight already held, which has no distance to cover.
+     * Clamped to 0 and 100, so going backwards reads as no progress rather
+     * than as a negative, and overshooting stays finished.
+     */
+    fun percentOfGoal(startKg: Double?, currentKg: Double?, targetKg: Double?): Int? {
+        if (startKg == null || currentKg == null || targetKg == null) return null
+        val distance = targetKg - startKg
+        if (kotlin.math.abs(distance) < 0.05) return null
+        val covered = currentKg - startKg
+        return ((covered / distance) * 100).coerceIn(0.0, 100.0).toInt()
+    }
+
+    /**
+     * The milestone to congratulate, or null when there is nothing new to say.
+     *
+     * Only whole multiples of [MILESTONE_STEP] count, and only ones above what
+     * has already been acknowledged, so slipping back below a milestone and
+     * crossing it again does not congratulate twice.
+     */
+    fun milestoneReached(percent: Int, alreadyCelebrated: Int): Int? {
+        val milestone = (percent / MILESTONE_STEP) * MILESTONE_STEP
+        return milestone.takeIf { it >= MILESTONE_STEP && it > alreadyCelebrated }
+    }
 }

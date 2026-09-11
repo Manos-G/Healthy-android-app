@@ -77,6 +77,8 @@ class RoundTripTest {
             unitsPerBeer = 2.0,
             unitsPerWine = 1.5,
             mlPerAlcoholUnit = 17.7,
+            goalStartKg = 82.4,
+            goalCelebratedPercent = 30,
         ),
     )
 

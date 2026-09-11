@@ -1,7 +1,6 @@
 package com.healthy.app.ui.weight
 
 import android.app.Application
-import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.healthy.app.analysis.WeightGoal
@@ -11,9 +10,7 @@ import com.healthy.app.data.HealthyDatabase
 import com.healthy.app.data.HealthySettings
 import com.healthy.app.data.SettingsStore
 import com.healthy.app.data.entity.Weight
-import com.healthy.app.data.export.OpenScaleCsv
 import com.healthy.app.health.HealthWriter
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
@@ -21,7 +18,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 data class WeightState(
     val points: List<WeightTrend.Point> = emptyList(),
@@ -41,6 +37,11 @@ data class WeightState(
     /** Where the current rate leads, week by week, from today's trend. */
     val projection: List<Double> = emptyList(),
     val dailyTargetKcal: Int? = null,
+    /** Newest first, for the history list. */
+    val history: List<Weight> = emptyList(),
+    /** How far along the goal is, and the last milestone worth saying so for. */
+    val goalProgressPercent: Int? = null,
+    val celebrate: Int? = null,
 )
 
 class WeightViewModel(app: Application) : AndroidViewModel(app) {
@@ -58,6 +59,20 @@ class WeightViewModel(app: Application) : AndroidViewModel(app) {
         _refusal,
     ) { weights, settings, refusal ->
         val points = WeightTrend.series(weights)
+        // Where the goal started. Stored once when the goal was set; for a
+        // goal that predates that being recorded, recovered from the trend on
+        // the day it began, and failing that from the first reading there is.
+        // Otherwise every existing goal would show no progress forever.
+        val startKg = settings.goalStartKg
+            ?: settings.goalStartedOn?.let { began ->
+                points.firstOrNull { it.date >= began }?.trendKg
+            }
+            ?: points.firstOrNull()?.trendKg
+        val percent = WeightGoal.percentOfGoal(
+            startKg = startKg,
+            currentKg = points.lastOrNull()?.trendKg,
+            targetKg = settings.goalTargetKg,
+        )
         // Body fat gets the same smoothing, over only the days that measured
         // it: a dumb scale in the middle of the series must not read as zero.
         val withFat = weights.filter { it.bodyFatPct != null }
@@ -83,6 +98,10 @@ class WeightViewModel(app: Application) : AndroidViewModel(app) {
             maxRateKgPerWeek = weights.lastOrNull()?.let { WeightGoal.maximumRate(it.weightKg) },
             rateRefusal = refusal,
             goalTargetKg = settings.goalTargetKg,
+            history = weights.asReversed(),
+            goalProgressPercent = percent,
+            celebrate = percent
+                ?.let { WeightGoal.milestoneReached(it, settings.goalCelebratedPercent) },
             projection = projectionFor(points, settings),
             dailyTargetKcal = settings.maintenanceKcal?.let { maintenance ->
                 com.healthy.app.analysis.Energy.dailyTarget(
@@ -147,8 +166,30 @@ class WeightViewModel(app: Application) : AndroidViewModel(app) {
     fun setGoalWeight(targetKg: Double) {
         viewModelScope.launch {
             settingsStore.setGoalTargetKg(targetKg)
+            // Where the goal started from, so progress can be a fraction of
+            // the distance rather than a distance with no scale. Taken once,
+            // when the goal is set, because a start weight that moved with the
+            // current weight would make progress permanently zero.
+            dao.mostRecent()?.weightKg?.let { settingsStore.setGoalStartKg(it) }
             _refusal.value = null
         }
+    }
+
+    /** Corrects or removes a reading already logged. */
+    fun editWeight(original: Weight, weightKg: Double) {
+        viewModelScope.launch {
+            dao.upsert(original.copy(weightKg = weightKg, source = Weight.MANUAL))
+            writer.writeWeight(weightKg, HealthyDay.startOf(original.date))
+        }
+    }
+
+    fun deleteWeight(weight: Weight) {
+        viewModelScope.launch { dao.delete(weight.date) }
+    }
+
+    /** Remembers a milestone so the congratulation is shown once, not forever. */
+    fun acknowledgeCelebration(percent: Int) {
+        viewModelScope.launch { settingsStore.setGoalCelebratedPercent(percent) }
     }
 
     fun setChangeGoal(rateKgPerWeek: Double) {
@@ -202,48 +243,6 @@ class WeightViewModel(app: Application) : AndroidViewModel(app) {
             _importStatus.value =
                 "Added $added reading${if (added == 1) "" else "s"} from " +
                     "${sources.joinToString(", ")}, skipped ${rows.size - added} already stored."
-        }
-    }
-
-    /**
-     * Imports an OpenScale export (spec 8.4).
-     *
-     * Rows whose date is already stored are ignored rather than overwritten,
-     * so a re-import cannot clobber a value the user has since corrected by
-     * hand — the DAO uses INSERT OR IGNORE for exactly this.
-     */
-    fun importOpenScale(source: Uri) {
-        viewModelScope.launch {
-            val text = runCatching {
-                withContext(Dispatchers.IO) {
-                    getApplication<Application>().contentResolver
-                        .openInputStream(source)?.bufferedReader()?.use { it.readText() }
-                        ?: error("the file could not be opened")
-                }
-            }.getOrElse {
-                _importStatus.value = "Import failed: ${it.message}"
-                return@launch
-            }
-
-            val outcome = OpenScaleCsv.parse(text)
-            if (outcome.problem != null) {
-                _importStatus.value = "Import failed: ${outcome.problem}."
-                return@launch
-            }
-
-            val before = dao.count()
-            dao.insertIgnoringExisting(outcome.rows)
-            val added = dao.count() - before
-            val alreadyHad = outcome.rows.size - added
-
-            _importStatus.value = buildString {
-                append("Added $added reading")
-                if (added != 1) append("s")
-                if (alreadyHad > 0) append(", skipped $alreadyHad already stored")
-                if (outcome.skipped > 0) append(", could not read ${outcome.skipped} row")
-                if (outcome.skipped > 1) append("s")
-                append(".")
-            }
         }
     }
 

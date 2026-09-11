@@ -14,7 +14,7 @@ interface WeightDao {
     suspend fun upsert(weight: Weight)
 
     /**
-     * An OpenScale CSV import skips a date already stored (spec 8.4). IGNORE
+     * A Health Connect sync skips a date already stored (spec 8.4). IGNORE
      * rather than REPLACE, so a re-import cannot overwrite a value the user
      * has since corrected by hand.
      */

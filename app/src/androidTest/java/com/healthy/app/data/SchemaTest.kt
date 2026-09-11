@@ -147,7 +147,7 @@ class SchemaTest {
         assertEquals(450, db.drinkDao().observeVolumeMl(from, to).first())
     }
 
-    /** Spec 8.4: an OpenScale import skips a date already stored. */
+    /** Spec 8.4: an import skips a date already stored. */
     @Test
     fun weightImportIgnoresADateAlreadyStored() = runBlocking {
         db.weightDao().upsert(
