@@ -24,6 +24,7 @@ import com.healthy.app.data.entity.NoteFts
 import com.healthy.app.data.entity.Product
 import com.healthy.app.data.entity.Recipe
 import com.healthy.app.data.entity.RecipeItem
+import com.healthy.app.data.entity.SleepSession
 import com.healthy.app.data.entity.StageBlock
 import com.healthy.app.data.entity.Weight
 import com.healthy.app.data.migration.Migrations
@@ -32,6 +33,7 @@ import com.healthy.app.data.migration.Migrations
     entities = [
         Night::class,
         StageBlock::class,
+        SleepSession::class,
         Drink::class,
         CustomDrink::class,
         Weight::class,
@@ -59,7 +61,7 @@ abstract class HealthyDatabase : RoomDatabase() {
     abstract fun maintenanceDao(): MaintenanceDao
 
     companion object {
-        const val VERSION = 5
+        const val VERSION = 6
         const val NAME = "healthy.db"
 
         @Volatile

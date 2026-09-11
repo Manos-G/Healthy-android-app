@@ -84,6 +84,13 @@ data class MorningForm(
     val sleepCount: Int = 1,
     /** The sleep the two clock times describe, when the day held more than one. */
     val mainSleepMinutes: Int? = null,
+    /**
+     * Every sleep of the night, so a night and a nap can both show their
+     * hours. The two fields above hold the longest one, because a row has one
+     * of everything; without this the screen showed one sleep's times while
+     * claiming the duration of two.
+     */
+    val sleeps: List<com.healthy.app.data.entity.SleepSession> = emptyList(),
     val sleepEndMillis: Long = 0,
     /** Both cycle lengths, labelled by source (spec 18.5). */
     val watchCycleMinutes: Int? = null,
@@ -242,6 +249,7 @@ class MorningViewModel(app: Application) : AndroidViewModel(app) {
                 sleepCount = night.sleepCount,
                 // Derived from the stored times, which describe the main sleep.
                 mainSleepMinutes = spanMinutes(night.sleepStart, night.sleepEnd),
+                sleeps = db.nightDao().sleepSessions(date),
                 stageSummary = stageSummary(night),
                 caffeineMg = dayDrinks.sumOf { it.mg },
                 caffeineCount = dayDrinks.size,
@@ -348,6 +356,13 @@ class MorningViewModel(app: Application) : AndroidViewModel(app) {
                         },
                         sleepCount = result.data.sleepCount,
                         mainSleepMinutes = result.data.mainSleepMinutes,
+                        sleeps = result.data.sleeps.map { (from, until) ->
+                            com.healthy.app.data.entity.SleepSession(
+                                nightDate = f.date,
+                                startTime = from,
+                                endTime = until,
+                            )
+                        },
                         hypnogram = hypnogram,
                         stageBlocks = result.data.stageBlocks,
                         sleepStartMillis = result.data.sleepStart,
@@ -475,6 +490,13 @@ class MorningViewModel(app: Application) : AndroidViewModel(app) {
                 nights.saveNightWithStages(night, blocks)
             } else {
                 nights.upsert(night)
+            }
+            // Written after the night, since they hang off its date.
+            if (f.sleeps.isNotEmpty()) {
+                nights.replaceSleepSessions(
+                    f.date,
+                    f.sleeps.map { it.copy(id = 0, nightDate = f.date) },
+                )
             }
             pendingStageBlocks = emptyList()
             // The reminder has served its purpose once the night is saved.

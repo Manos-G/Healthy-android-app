@@ -56,6 +56,8 @@ class HealthReader(private val context: Context) {
          * When they differ the day held a nap as well as a night.
          */
         val mainSleepMinutes: Int = 0,
+        /** Every sleep of the night, earliest first, as start-to-end millis. */
+        val sleeps: List<Pair<Long, Long>> = emptyList(),
         /** Which app supplied the heart rate, which may differ from the sleep. */
         val heartRateSource: String? = null,
         /** Individual samples, which spec 18.3 requires over the 30-minute groups. */
@@ -218,6 +220,7 @@ class HealthReader(private val context: Context) {
                     sleepEnd = end,
                     minutes = minutes,
                     mainSleepMinutes = mainMinutes,
+                    sleeps = chosen.sortedBy { it.start }.map { it.start to it.end },
                     stageBlocks = blocks,
                     totals = SleepAnalysis.stageTotals(blocks),
                     restingHr = SleepAnalysis.restingHeartRate(bpmForResting),

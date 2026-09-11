@@ -624,13 +624,17 @@ private fun TrendCard(state: WeightState) {
                         val py = y(value)
                         if (i == 0) planPath.moveTo(px, py) else planPath.lineTo(px, py)
                     }
+                    // Full strength, and a long dash. At a third opacity with a
+                    // fine dash it was indistinguishable from the trend it runs
+                    // beside — over five days the two are a tenth of a kilogram
+                    // apart, which is fourteen pixels.
                     drawPath(
                         planPath,
-                        color = HealthyColors.Paper.copy(alpha = 0.35f),
+                        color = HealthyColors.Muted,
                         style = Stroke(
-                            width = 2f,
+                            width = 2.5f,
                             pathEffect = androidx.compose.ui.graphics.PathEffect
-                                .dashPathEffect(floatArrayOf(2f, 4f)),
+                                .dashPathEffect(floatArrayOf(9f, 5f)),
                         ),
                     )
                 }
@@ -661,6 +665,21 @@ private fun TrendCard(state: WeightState) {
                                 .dashPathEffect(floatArrayOf(6f, 6f)),
                         ),
                     )
+                }
+            }
+
+            // Which line is which. Three lines that differ only in dash length
+            // need naming, and the names have to carry their colours.
+            Row(
+                Modifier.fillMaxWidth().padding(top = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Text("— trend", color = HealthyColors.Sleep, fontSize = 10.sp)
+                if (plannedPoints.size >= 2) {
+                    Text("– – plan", color = HealthyColors.Muted, fontSize = 10.sp)
+                }
+                if (state.projection.size >= 2) {
+                    Text("· · projected", color = HealthyColors.Caffeine, fontSize = 10.sp)
                 }
             }
 

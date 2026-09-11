@@ -83,6 +83,35 @@ object Migrations {
         }
     }
 
+    /**
+     * Each sleep of a night, so both a night and a nap can show their times.
+     *
+     * Nothing is back-filled: nights already stored keep the single pair of
+     * times on the `night` row, which is what was known when they were written.
+     * A re-sync fills this in for any night whose data is still in Health
+     * Connect.
+     */
+    val MIGRATION_5_6 = object : Migration(5, 6) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS `sleep_session` (
+                    `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    `nightDate` TEXT NOT NULL,
+                    `startTime` INTEGER NOT NULL,
+                    `endTime` INTEGER NOT NULL,
+                    FOREIGN KEY(`nightDate`) REFERENCES `night`(`date`)
+                        ON UPDATE NO ACTION ON DELETE CASCADE
+                )
+                """.trimIndent()
+            )
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS `index_sleep_session_nightDate` " +
+                    "ON `sleep_session` (`nightDate`)"
+            )
+        }
+    }
+
     val ALL: Array<Migration> =
-        arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+        arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
 }

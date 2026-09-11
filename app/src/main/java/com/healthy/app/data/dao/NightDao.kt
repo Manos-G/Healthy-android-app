@@ -7,6 +7,7 @@ import androidx.room.Query
 import androidx.room.Transaction
 import androidx.room.Update
 import com.healthy.app.data.entity.Night
+import com.healthy.app.data.entity.SleepSession
 import com.healthy.app.data.entity.StageBlock
 import kotlinx.coroutines.flow.Flow
 
@@ -78,6 +79,27 @@ interface NightDao {
 
     @Query("DELETE FROM night WHERE date = :date")
     suspend fun delete(date: String)
+
+    // --- sleep sessions ---------------------------------------------------
+
+    @Query("SELECT * FROM sleep_session WHERE nightDate = :date ORDER BY startTime ASC")
+    suspend fun sleepSessions(date: String): List<SleepSession>
+
+    @Insert
+    suspend fun insertSleepSessions(sessions: List<SleepSession>)
+
+    @Query("DELETE FROM sleep_session WHERE nightDate = :date")
+    suspend fun deleteSleepSessions(date: String)
+
+    @Query("SELECT * FROM sleep_session ORDER BY nightDate ASC, startTime ASC")
+    suspend fun allSleepSessionsForExport(): List<SleepSession>
+
+    /** Replaced wholesale, so a re-sync cannot leave a stale sleep behind. */
+    @Transaction
+    suspend fun replaceSleepSessions(date: String, sessions: List<SleepSession>) {
+        deleteSleepSessions(date)
+        insertSleepSessions(sessions)
+    }
 
     // --- stage blocks -----------------------------------------------------
 

@@ -85,6 +85,13 @@ fun MorningScreen(
     }
 }
 
+/** An instant as `HH:mm` in the phone's own time zone. */
+private fun Long.asClock(): String =
+    java.time.Instant.ofEpochMilli(this)
+        .atZone(java.time.ZoneId.systemDefault())
+        .toLocalTime()
+        .format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"))
+
 @Composable
 private fun SectionCard(content: @Composable ColumnScope.() -> Unit) {
     Card(
@@ -233,6 +240,36 @@ private fun SleepCard(form: MorningForm, vm: MorningViewModel) {
             fontWeight = FontWeight.Medium,
             modifier = Modifier.padding(top = 10.dp),
         )
+
+        // Each sleep with its own hours. The two fields above can only hold one
+        // pair of times, so a night with a nap showed the longest sleep and
+        // left the other with no times at all.
+        if (form.sleeps.size > 1) {
+            form.sleeps.forEach { sleep ->
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text(
+                        "${sleep.startTime.asClock()} – ${sleep.endTime.asClock()}",
+                        color = HealthyColors.Paper,
+                        fontSize = 13.sp,
+                    )
+                    Text(
+                        "${sleep.minutes / 60} h ${sleep.minutes % 60} m",
+                        color = HealthyColors.Muted,
+                        fontSize = 13.sp,
+                    )
+                }
+            }
+            Text(
+                "The fields above hold the longest of these, which is the one the " +
+                    "stages and the heart rate describe.",
+                color = HealthyColors.Muted,
+                fontSize = 11.sp,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        }
 
         Row(
             modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
