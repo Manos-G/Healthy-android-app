@@ -73,6 +73,7 @@ object JsonBackup {
                 put("sleepStart", n.sleepStart)
                 put("sleepEnd", n.sleepEnd)
                 put("minutes", n.minutes)
+                put("sleepCount", n.sleepCount)
                 putOrNull("deepMin", n.deepMin)
                 putOrNull("lightMin", n.lightMin)
                 putOrNull("remMin", n.remMin)

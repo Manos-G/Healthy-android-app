@@ -66,6 +66,22 @@ data class MorningForm(
     val hypnogram: com.healthy.app.analysis.Hypnogram.Result? = null,
     val stageBlocks: List<com.healthy.app.data.entity.StageBlock> = emptyList(),
     val sleepStartMillis: Long = 0,
+    /**
+     * Time actually asleep, as measured, when that is not the span between
+     * falling asleep and waking.
+     *
+     * A day with a night and a nap has two sleeps and one span, and the span
+     * includes the waking hours between them. The reader adds the sleeps up;
+     * without somewhere to put that figure the form recomputed the span from
+     * the two clock times and threw the measurement away — which is why
+     * counting both sleeps changed nothing on screen.
+     *
+     * Cleared the moment the user types a time, because then the times they
+     * typed are the better answer.
+     */
+    val measuredMinutes: Int? = null,
+    /** How many separate sleeps that measurement covers. */
+    val sleepCount: Int = 1,
     val sleepEndMillis: Long = 0,
     /** Both cycle lengths, labelled by source (spec 18.5). */
     val watchCycleMinutes: Int? = null,
@@ -82,6 +98,7 @@ data class MorningForm(
      */
     val minutes: Int?
         get() {
+            measuredMinutes?.let { return it }
             val start = sleepStart?.toLocalTimeOrNull() ?: return null
             val end = sleepEnd?.toLocalTimeOrNull() ?: return null
             var span = Duration.between(start, end).toMinutes()
@@ -90,7 +107,14 @@ data class MorningForm(
         }
 
     val durationLabel: String
-        get() = minutes?.let { "${it / 60} h ${it % 60} m" } ?: "—"
+        get() = minutes?.let {
+            buildString {
+                append("${it / 60} h ${it % 60} m")
+                // Otherwise a duration shorter than the clock times imply
+                // looks like an error rather than the sum it is.
+                if (sleepCount > 1) append(" across $sleepCount sleeps")
+            }
+        } ?: "—"
 
     /** A night is worth saving once it has times or a rating. */
     val canSave: Boolean
@@ -189,6 +213,11 @@ class MorningViewModel(app: Application) : AndroidViewModel(app) {
                 roomTempC = night.roomTempC?.let { trimNumber(it) }.orEmpty(),
                 notes = night.notes,
                 editedFields = night.editedFields,
+                // The stored measurement, not the span between the two clock
+                // times: reopening a saved night must not recompute a total
+                // that two sleeps made smaller than the stretch they cover.
+                measuredMinutes = night.minutes.takeIf { it > 0 },
+                sleepCount = night.sleepCount,
                 stageSummary = stageSummary(night),
                 caffeineMg = dayDrinks.sumOf { it.mg },
                 caffeineCount = dayDrinks.size,
@@ -216,7 +245,17 @@ class MorningViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun update(block: (MorningForm) -> MorningForm) {
-        _form.value = block(_form.value)
+        val before = _form.value
+        val after = block(before)
+        // A typed time replaces a measurement: the user is correcting it, and
+        // the span between what they typed is then the honest answer.
+        _form.value = if (
+            after.sleepStart != before.sleepStart || after.sleepEnd != before.sleepEnd
+        ) {
+            after.copy(measuredMinutes = null, sleepCount = 1)
+        } else {
+            after
+        }
     }
 
     /**
@@ -277,6 +316,13 @@ class MorningViewModel(app: Application) : AndroidViewModel(app) {
                         else result.data.restingHr?.toString().orEmpty(),
                         spo2 = if (SyncedField.SPO2 in edited) f.spo2
                         else result.data.spo2?.let { "%.1f".format(it) }.orEmpty(),
+                        // The measured total, which for two sleeps is their
+                        // sum and not the span the clock times imply. Dropped
+                        // if the user has typed either time themselves.
+                        measuredMinutes = result.data.minutes.takeIf {
+                            SyncedField.SLEEP_START !in edited && SyncedField.SLEEP_END !in edited
+                        },
+                        sleepCount = result.data.sleepCount,
                         hypnogram = hypnogram,
                         stageBlocks = result.data.stageBlocks,
                         sleepStartMillis = result.data.sleepStart,
@@ -380,6 +426,7 @@ class MorningViewModel(app: Application) : AndroidViewModel(app) {
                     sleepStart = startMillis ?: existing?.sleepStart ?: 0L,
                     sleepEnd = endMillis ?: existing?.sleepEnd ?: 0L,
                     minutes = f.minutes ?: existing?.minutes ?: 0,
+                    sleepCount = f.sleepCount,
                     deepMin = totals.deepMin,
                     lightMin = totals.lightMin,
                     remMin = totals.remMin,

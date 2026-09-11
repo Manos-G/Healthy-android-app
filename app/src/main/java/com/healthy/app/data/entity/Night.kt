@@ -26,6 +26,15 @@ data class Night(
     @ColumnInfo(name = "sleepEnd") val sleepEnd: Long,
     @ColumnInfo(name = "minutes") val minutes: Int,
 
+    /**
+     * How many separate sleeps [minutes] was added up from.
+     *
+     * More than one means a nap as well as a night, and that [minutes] is
+     * their sum rather than the span from [sleepStart] to [sleepEnd] — which
+     * would count the waking hours in between.
+     */
+    @ColumnInfo(name = "sleepCount", defaultValue = "1") val sleepCount: Int = 1,
+
     // From Health Connect. Null when the night has no stage list at all.
     @ColumnInfo(name = "deepMin") val deepMin: Int? = null,
     @ColumnInfo(name = "lightMin") val lightMin: Int? = null,

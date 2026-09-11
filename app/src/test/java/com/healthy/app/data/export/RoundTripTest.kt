@@ -48,7 +48,15 @@ class RoundTripTest {
                 notes = "sore throat, slept badly",
                 editedFields = setOf("restingHr", "wakeups"),
             ),
-            Night(date = "2026-03-05", sleepStart = 1L, sleepEnd = 2L, minutes = 400),
+            // Two sleeps: the total is their sum, not the span, and both must
+            // survive the round trip or a restored night reads as one sleep.
+            Night(
+                date = "2026-03-05",
+                sleepStart = 1L,
+                sleepEnd = 2L,
+                minutes = 400,
+                sleepCount = 2,
+            ),
         ),
         stageBlocks = listOf(
             StageBlock(id = 1, nightDate = "2026-03-04", type = "deep", startTime = 10, endTime = 20),

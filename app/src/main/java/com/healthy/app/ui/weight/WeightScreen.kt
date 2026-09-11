@@ -544,97 +544,82 @@ private fun TrendCard(state: WeightState) {
             )
         }
 
-        if (state.points.size >= 2) {
+        // Only the recent stretch. A year of readings compressed into a phone
+        // width hides the last fortnight, which is the part being acted on.
+        val shown = remember(state.points) { state.points.takeLast(CHART_DAYS) }
+
+        if (shown.size >= 2) {
             /*
-             * Two things were wrong here, and both changed what the chart
-             * said rather than only how it looked.
+             * Scaled to the readings, not to the goal.
              *
-             * Points were spaced by their position in the list, so three
-             * readings on Monday, Tuesday and the following Friday were drawn
-             * evenly apart. A gap in weighing became invisible and the line's
-             * slope — the one thing a weight chart is read for — was wrong.
-             * They are spaced by date now.
-             *
-             * The projection was drawn on a second, narrower scale of its own,
-             * so it started at a different x from the last real point and the
-             * plan appeared detached from the trend it continues. Both share
-             * one scale spanning history and projection together.
+             * Including the goal weight in the range meant a target ten kilos
+             * away stretched the axis over ten kilos, and the actual readings
+             * — which move by tenths — collapsed into a flat line at the top.
+             * The chart is for reading the trend, so the trend decides the
+             * scale and the goal line appears only when it happens to fall
+             * inside it.
              */
-            val dayMillis = 86_400_000.0
-            val firstDay = remember(state.points) {
-                LocalDate.parse(state.points.first().date).toEpochDay()
-            }
-            val lastDay = remember(state.points) {
-                LocalDate.parse(state.points.last().date).toEpochDay()
-            }
-            val projectedDays = state.projection.size.coerceAtLeast(1) - 1
+            val firstDay = remember(shown) { LocalDate.parse(shown.first().date).toEpochDay() }
+            val lastDay = remember(shown) { LocalDate.parse(shown.last().date).toEpochDay() }
+            val projectedDays = (state.projection.size - 1).coerceAtLeast(0)
             val spanDays = ((lastDay - firstDay) + projectedDays).coerceAtLeast(1L).toFloat()
 
-            val values = state.points.flatMap { listOf(it.weightKg, it.trendKg) } +
-                state.projection + listOfNotNull(state.goalTargetKg)
-            val lo = values.min() - 0.3
-            val hi = values.max() + 0.3
+            val readings = shown.flatMap { listOf(it.weightKg, it.trendKg) } + state.projection
+            val lo = readings.min() - 0.2
+            val hi = readings.max() + 0.2
 
-            Canvas(Modifier.fillMaxWidth().height(150.dp).padding(top = 12.dp)) {
+            Canvas(Modifier.fillMaxWidth().height(160.dp).padding(top = 12.dp)) {
                 val w = size.width
                 val h = size.height
-                val span = (hi - lo).coerceAtLeast(0.1)
-                val top = 4f
-                val bottom = h - 4f
+                val span = (hi - lo).coerceAtLeast(0.4)
+                val top = 10f
+                val bottom = h - 10f
 
                 fun y(v: Double) = bottom - ((v - lo) / span).toFloat() * (bottom - top)
                 fun x(dayOffset: Long) = (dayOffset / spanDays) * w
 
-                // A line every whole kilogram, so the vertical distance has a
-                // size the eye can read instead of being merely relative.
-                var gridKg = kotlin.math.ceil(lo).toInt()
+                var gridKg = kotlin.math.ceil(lo * 2) / 2
                 while (gridKg <= hi) {
-                    val gy = y(gridKg.toDouble())
                     drawLine(
-                        color = HealthyColors.Rule.copy(alpha = 0.45f),
-                        start = Offset(0f, gy),
-                        end = Offset(w, gy),
+                        color = HealthyColors.Rule.copy(alpha = 0.4f),
+                        start = Offset(0f, y(gridKg)),
+                        end = Offset(w, y(gridKg)),
                         strokeWidth = 1f,
                     )
-                    gridKg++
+                    gridKg += 0.5
                 }
 
-                state.goalTargetKg?.let { goal ->
-                    if (goal in lo..hi) {
-                        drawLine(
-                            color = HealthyColors.Caffeine.copy(alpha = 0.7f),
-                            start = Offset(0f, y(goal)),
-                            end = Offset(w, y(goal)),
-                            strokeWidth = 1.5f,
-                            pathEffect = androidx.compose.ui.graphics.PathEffect
-                                .dashPathEffect(floatArrayOf(3f, 5f)),
-                        )
-                    }
+                state.goalTargetKg?.takeIf { it in lo..hi }?.let { goal ->
+                    drawLine(
+                        color = HealthyColors.Caffeine.copy(alpha = 0.7f),
+                        start = Offset(0f, y(goal)),
+                        end = Offset(w, y(goal)),
+                        strokeWidth = 1.5f,
+                        pathEffect = androidx.compose.ui.graphics.PathEffect
+                            .dashPathEffect(floatArrayOf(3f, 5f)),
+                    )
                 }
 
                 // The daily readings are the quiet element: they are noise
                 // from water, food and glycogen (spec 8.2).
-                state.points.forEach { p ->
-                    val px = x(LocalDate.parse(p.date).toEpochDay() - firstDay)
+                shown.forEach { p ->
                     drawCircle(
                         color = HealthyColors.Muted.copy(alpha = 0.55f),
                         radius = 2.5f,
-                        center = Offset(px, y(p.weightKg)),
+                        center = Offset(x(LocalDate.parse(p.date).toEpochDay() - firstDay), y(p.weightKg)),
                     )
                 }
 
                 // The trend is the signal, so it is the strong element.
                 val path = Path()
-                state.points.forEachIndexed { i, p ->
+                shown.forEachIndexed { i, p ->
                     val px = x(LocalDate.parse(p.date).toEpochDay() - firstDay)
                     val py = y(p.trendKg)
                     if (i == 0) path.moveTo(px, py) else path.lineTo(px, py)
                 }
                 drawPath(path, color = HealthyColors.Sleep, style = Stroke(width = 3f))
 
-                // Spec 8.6: the plan, drawn against what actually happened.
-                // Dashed, because it is a projection and not a measurement,
-                // and starting exactly where the trend stops.
+                // Spec 8.6: the plan, starting exactly where the trend stops.
                 if (state.projection.size >= 2) {
                     val projPath = Path()
                     state.projection.forEachIndexed { i, value ->
@@ -654,39 +639,51 @@ private fun TrendCard(state: WeightState) {
                 }
             }
 
-            // The scale in words. Without it the chart showed a shape and no
-            // sizes, so a 0.3 kg wobble and a 5 kg fall looked the same.
+            // Dates below, weights beside. They were both in a row under the
+            // chart, so a pair of kilogram figures sat where the axis labels
+            // belong and read as the x axis run backwards.
             Row(
-                Modifier.fillMaxWidth().padding(top = 2.dp),
+                Modifier.fillMaxWidth().padding(top = 4.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
+                Text(shortDate(shown.first().date), color = HealthyColors.Muted, fontSize = 10.sp)
                 Text(
-                    "%.1f kg".format(lo),
-                    color = HealthyColors.Muted,
+                    "%.1f – %.1f kg".format(lo, hi),
+                    color = HealthyColors.Rule,
                     fontSize = 10.sp,
                 )
-                state.goalTargetKg?.let {
-                    Text("goal ${"%.1f".format(it)}", color = HealthyColors.Caffeine, fontSize = 10.sp)
-                }
                 Text(
-                    "%.1f kg".format(hi),
-                    color = HealthyColors.Muted,
+                    if (state.projection.size >= 2) {
+                        shortDate(LocalDate.ofEpochDay(lastDay + projectedDays).toString())
+                    } else {
+                        shortDate(shown.last().date)
+                    },
+                    color = if (state.projection.size >= 2) {
+                        HealthyColors.Caffeine
+                    } else {
+                        HealthyColors.Muted
+                    },
                     fontSize = 10.sp,
                 )
             }
-            Row(
-                Modifier.fillMaxWidth().padding(top = 6.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Text(state.points.first().date, color = HealthyColors.Muted, fontSize = 10.sp)
-                if (state.projection.isNotEmpty()) {
-                    Text(
-                        "projected",
-                        color = HealthyColors.Caffeine,
-                        fontSize = 10.sp,
-                    )
-                }
-                Text(state.points.last().date, color = HealthyColors.Muted, fontSize = 10.sp)
+
+            if (state.projection.size >= 2) {
+                Text(
+                    "Dashed line is where the current rate leads, reaching " +
+                        "${"%.1f".format(state.projection.last())} kg on " +
+                        longDate(LocalDate.ofEpochDay(lastDay + projectedDays).toString()) + ".",
+                    color = HealthyColors.Caffeine,
+                    fontSize = 11.sp,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
+            if (state.points.size > CHART_DAYS) {
+                Text(
+                    "Last $CHART_DAYS days. The whole series is in the history below.",
+                    color = HealthyColors.Muted,
+                    fontSize = 10.sp,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
             }
         }
 
@@ -919,6 +916,18 @@ private fun CelebrationDialog(percent: Int, targetKg: Double?, onDismiss: () -> 
         }
     }
 }
+
+/** How much of the series the chart shows. Beyond a month it stops being readable. */
+private const val CHART_DAYS = 30
+
+private val SHORT_DATE = java.time.format.DateTimeFormatter.ofPattern("d MMM")
+private val LONG_DATE = java.time.format.DateTimeFormatter.ofPattern("d MMM yyyy")
+
+private fun shortDate(iso: String): String =
+    runCatching { LocalDate.parse(iso).format(SHORT_DATE) }.getOrDefault(iso)
+
+private fun longDate(iso: String): String =
+    runCatching { LocalDate.parse(iso).format(LONG_DATE) }.getOrDefault(iso)
 
 private const val HISTORY_SHOWN = 30
 

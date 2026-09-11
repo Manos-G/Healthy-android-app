@@ -72,6 +72,9 @@ object JsonRestore {
                         sleepStart = o.optLong("sleepStart"),
                         sleepEnd = o.optLong("sleepEnd"),
                         minutes = o.optInt("minutes"),
+                        // A backup written before nights counted their sleeps
+                        // restores as one, which is what it was.
+                        sleepCount = o.optInt("sleepCount", 1).coerceAtLeast(1),
                         deepMin = o.intOrNull("deepMin"),
                         lightMin = o.intOrNull("lightMin"),
                         remMin = o.intOrNull("remMin"),
