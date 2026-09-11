@@ -34,8 +34,8 @@ android {
         // Bumped together, always. Android and Obtainium both decide "is
         // this an update" from versionCode alone; a new name with the old
         // number installs on nobody's phone.
-        versionCode = 3
-        versionName = "0.0.3"
+        versionCode = 4
+        versionName = "0.0.4"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
